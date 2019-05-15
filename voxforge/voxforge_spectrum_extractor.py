@@ -5,6 +5,7 @@ from PIL import Image
 import os
 import random
 from IPython.display import clear_output
+import pandas as pd
 
 
 def stft(sig, frame_size, overlap_fac=0.75, window=np.hanning):
@@ -96,6 +97,45 @@ def plotstft(audiopath, binsize=2 ** 10, name='tmp.png', alpha=1, quantity=1, im
     image.save(name)
 
 
+def convert_to_images2(path, validation_part=0.2, img_size=None):
+    """converts wavs to images"""
+    files_list = []
+    audios_path = check_path([path, "audios"])
+    pics_path = check_path([path, "pics"])
+    out_path = check_path([pics_path, "out"])
+    max_count = get_min_files_count(audios_path)
+    print('Max numbers of files wil be used:', max_count)
+    for folder in os.listdir(audios_path):
+        print("\nOutputting from folder:", folder.upper())
+        lang_folder = check_path([audios_path, folder])
+        # out_folder = check_path([pics_path, folder])
+        if os.path.isdir(lang_folder):
+            wav_folder = check_path([lang_folder, "wav"])
+            count = 0
+            wav_files = os.listdir(wav_folder)
+            random.shuffle(wav_files)
+            for i in range(max_count):
+                file = wav_files[i]
+                file_path = os.path.join(wav_folder, file)
+                count += 1
+                if count > max_count:
+                    break
+                if os.path.isfile(file_path):
+                    file_name, file_extension = os.path.splitext(file)
+                    clear_output(wait=True)
+                    print(folder.upper() + ' (' + str(count) + '/' + str(max_count) + '):', file, end='\r')
+                    quantity = 10
+                    for idx in range(quantity):
+                        file_name_ext = folder.lower() + "_" + file_name + "_" + str(idx) + ".png"
+                        out_file = os.path.join(out_path, file_name_ext)
+                        alpha = np.random.uniform(0.9, 1.1)
+                        plotstft(file_path, name=out_file, alpha=alpha, quantity=quantity, img_size=img_size)
+                        temp = {'file': file_name_ext, 'lang': folder.upper()}
+                        files_list.append(temp)
+    df = pd.DataFrame.from_dict(files_list)
+    df.to_csv(os.path.join(pics_path, "files_list.csv"), index=False)
+
+
 def convert_to_images(path, validation_part=0.2, img_size=None):
     """converts wavs to images"""
     audios_path = check_path([path, "audios"])
@@ -103,7 +143,6 @@ def convert_to_images(path, validation_part=0.2, img_size=None):
     pics_data_path = check_path([pics_path, "train"])
     pics_validation_path = check_path([pics_path, "validation"])
     max_count = get_min_files_count(audios_path)
-    print(max_count, (1 - validation_part), max_count * (1 - validation_part))
     print('Max numbers of files wil be used:', max_count)
     for folder in os.listdir(audios_path):
         print("\nOutputting from folder:", folder.upper())
@@ -162,7 +201,7 @@ def get_min_files_count(audios_path):
 
 def main():
     path = r"D:/speechrecogn/voxforge/"
-    convert_to_images(path, validation_part=0.2, img_size=(150, 150))
+    convert_to_images2(path, validation_part=0.2, img_size=(150, 150))
 
 
 if __name__ == "__main__":
