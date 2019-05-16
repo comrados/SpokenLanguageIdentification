@@ -1,74 +1,89 @@
 import numpy as np
-import matplotlib.pyplot as plt
 import pandas as pd
-import scipy as sp
 import os
-import librosa as lr
-import shutil
 import dask.array.image as dai
-import dask.dataframe as dd
-import dask as da
+import dask.array as da
 import h5py
-import glob
 
 
-in_dim = (192,192,1)
-out_dim = 176
-batch_size = 32
-mp3_path = 'data/mp3/'
-tr_path = 'data/train/'
-va_path = 'data/valid/'
-te_path = 'data/test/'
-data_size = 66176
-tr_size = 52800
-va_size = 4576
-te_size = 8800
-
-
-def mp3_to_img(path, height=192, width=192):
-    signal, sr = lr.load(path, res_type='kaiser_fast')
-    hl = signal.shape[0]//(width*1.1) #this will cut away 5% from start and end
-    spec = lr.feature.melspectrogram(signal, n_mels=height, hop_length=int(hl))
-    img = lr.logamplitude(spec)**2
-    start = (img.shape[1] - width) // 2
-    return img[:, start:start+width]
-
-
-def process_audio(in_folder, out_folder):
-    os.makedirs(out_folder, exist_ok=True)
-    files = glob.glob(in_folder + '*.mp3')
-    start = len(in_folder)
-    for file in files:
-        img = mp3_to_img(file)
-        sp.misc.imsave(out_folder + file[start:] + '.jpg', img)
-
-
-def process_audio_with_classes(in_folder, out_folder, labels):
-    os.makedirs(out_folder, exist_ok=True)
-    for i in range(len(labels['Sample Filename'])):
-        file = labels['Sample Filename'][i]
-        lang = labels['Language'][i]
-        os.makedirs(out_folder + lang, exist_ok=True)
-        img = mp3_to_img(in_folder + file)
-        sp.misc.imsave(out_folder + lang + '/' + file + '.jpg', img)
-
+def del_previous_data(path):
+    try:
+        os.remove(os.path.join(path, "data.h5"))
+        os.remove(os.path.join(path, "x_tr.h5"))
+        os.remove(os.path.join(path, "y_tr.h5"))
+        os.remove(os.path.join(path, "x_va.h5"))
+        os.remove(os.path.join(path, "y_va.h5"))
+    except Exception as err:
+        print(err)
 
 def jpgs_to_h5(source, target, name):
-    langs = []
-    paths = [os.path.join(source, "validation"), os.path.join(source, "train")]    
-    for path in paths:
-        for lang in os.listdir(path):
-            lang_path = os.path.join(path, lang)
-            d = dai.imread(lang_path + r"/*.png")
-            print(dai.imread(lang_path + r"/*.png"))
-            for file in os.listdir(lang_path):
-                file_path = os.path.join(lang_path, file)
-                
-                langs.append(lang)
-    return langs, d
-    
-path = r"D:/speechrecogn/voxforge/pics"
-val_path = os.path.join(path, "validation")
-train_path = os.path.join(path, "train")
+    dai.imread(source + '*.png').to_hdf5(target, name)
+    return len(os.listdir(source))
 
-langs, d = jpgs_to_h5(r"D:\speechrecogn\voxforge\pics", r"D:\speechrecogn\voxforge\pics\data.h5", 'data')
+
+def get_h5_dataset(path, val_part=0.25):    
+    path_files_list = os.path.join(path, "files_list.csv")
+    path_pics = os.path.join(path, "out/")
+    path_out_data = os.path.join(path, "data.h5")
+    data_name = 'data'
+    count = jpgs_to_h5(path_pics, path_out_data, data_name)
+    
+    y = pd.read_csv(path_files_list)['lang']
+    y = pd.get_dummies(y)
+    y = y.reindex_axis(sorted(y.columns), axis=1)
+    y = y.values
+    y = da.from_array(y, chunks=1000)
+    
+    x = h5py.File(path_out_data)[data_name]
+    x = da.from_array(x, chunks=1000)    
+    
+    va_size = int(val_part*count)
+    tr_size = count - va_size
+    
+    shfl = np.random.permutation(count)
+    tr_idx = shfl[:tr_size]
+    va_idx = shfl[tr_size:tr_size+va_size]
+    x[tr_idx].to_hdf5(os.path.join(path, "x_tr.h5"), 'x_tr')
+    y[tr_idx].to_hdf5(os.path.join(path, "y_tr.h5"), 'y_tr')
+    x[va_idx].to_hdf5(os.path.join(path, "x_va.h5"), 'x_va')
+    y[va_idx].to_hdf5(os.path.join(path, "y_va.h5"), 'y_va')
+
+
+import random
+import matplotlib.pyplot as plt
+
+def plot_samples(data, shape=(2, 2)):
+    h = shape[0]
+    w = shape[1]
+    n = h*w
+    rands = [random.randint(0, len(data)) for _ in range(n)]
+    counter = 0
+    for i in range(1, n+1):
+            plt.subplot(h, w, i)
+            plt.imshow(data[rands[counter], :, :])
+            counter += 1            
+    plt.show()
+
+
+def main():
+    path = r"D:/speechrecogn/voxforge/pics/"
+    
+    del_previous_data(path)
+    
+    get_h5_dataset(path, val_part=0.25)
+    
+    
+    x_tr = da.from_array(h5py.File(os.path.join(path, "x_tr.h5"))['x_tr'], chunks=1000)
+    y_tr = da.from_array(h5py.File(os.path.join(path, "y_tr.h5"))['y_tr'], chunks=1000)
+    print(x_tr.shape, y_tr.shape)
+    x_va = da.from_array(h5py.File(os.path.join(path, "x_va.h5"))['x_va'], chunks=1000)
+    y_va = da.from_array(h5py.File(os.path.join(path, "y_va.h5"))['y_va'], chunks=1000)
+    print(x_va.shape, y_va.shape)
+    x_tr /= 255.
+    x_va /= 255.
+    plot_samples(x_va, shape=(2, 2))
+    plot_samples(x_tr, shape=(2, 2))
+
+if __name__ == "__main__":
+    main()
+    

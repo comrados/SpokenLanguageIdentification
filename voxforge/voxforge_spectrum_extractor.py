@@ -97,7 +97,7 @@ def plotstft(audiopath, binsize=2 ** 10, name='tmp.png', alpha=1, quantity=1, im
     image.save(name)
 
 
-def convert_to_images2(path, validation_part=0.2, img_size=None):
+def convert_to_images2(path, img_size=None):
     """converts wavs to images"""
     files_list = []
     audios_path = check_path([path, "audios"])
@@ -201,7 +201,8 @@ def get_min_files_count(audios_path):
 
 def main():
     path = r"D:/speechrecogn/voxforge/"
-    convert_to_images2(path, validation_part=0.2, img_size=(150, 150))
+    #convert_to_images(path, validation_part=0.2, img_size=(150, 150))
+    convert_to_images2(path, img_size=(150, 150))
 
 
 if __name__ == "__main__":
