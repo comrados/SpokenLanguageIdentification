@@ -17,17 +17,20 @@ def del_previous_data(path):
         print(err)
 
 
-def jpgs_to_h5(source, target, name):
-    dai.imread(source + '*.png').to_hdf5(target, name)
+def pics_to_h5(source, target, name):    
+    arr = dai.imread(source + '*.png')
+    if len(arr.shape) == 3:
+        arr = arr.reshape(arr.shape + (1,))
+    arr.to_hdf5(target, name)
     return len(os.listdir(source))
 
 
 def get_h5_dataset(path, val_part=0.25):
     path_files_list = os.path.join(path, "files_list.csv")
     path_pics = os.path.join(path, "out/")
-    path_out_data = os.path.join(path, "data.h5")
+    path_out_data = os.path.join(path, "temp.h5")
     data_name = 'data'
-    count = jpgs_to_h5(path_pics, path_out_data, data_name)
+    count = pics_to_h5(path_pics, path_out_data, data_name)
 
     y = pd.read_csv(path_files_list)['lang']
     y = pd.get_dummies(y)
@@ -60,3 +63,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    

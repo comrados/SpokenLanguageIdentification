@@ -17,7 +17,7 @@ def plot_samples(data, labels, shape=(2, 2)):
         plt.subplot(h, w, i)
         plt.title("Sample " + str(rands[i - 1]) + " " + str(label))
         plt.axis('off')
-        plt.imshow(data[rands[i - 1], :, :])
+        plt.imshow(data[rands[i - 1], :, :, 0])
     plt.show()
 
 

@@ -63,7 +63,7 @@ def logscale_spec(spec, sr=16000, factor=20., alpha=1.0, f0=0.9, fmax=1):
             totw[j + 1] += w_up
 
     for i in range(len(freqs)):
-        if (totw[i] > 1e-6):
+        if totw[i] > 1e-6:
             freqs[i] /= totw[i]
 
     return newspec, freqs
