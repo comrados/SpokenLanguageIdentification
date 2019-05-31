@@ -8,7 +8,7 @@ import h5py
 
 def del_previous_data(path):
     try:
-        os.remove(os.path.join(path, "data.h5"))
+        os.remove(os.path.join(path, "temp.h5"))
         os.remove(os.path.join(path, "x_tr.h5"))
         os.remove(os.path.join(path, "y_tr.h5"))
         os.remove(os.path.join(path, "x_va.h5"))
@@ -18,16 +18,16 @@ def del_previous_data(path):
 
 
 def pics_to_h5(source, target, name):    
-    arr = dai.imread(source + '*.png')
+    arr = dai.imread(source + '/*.png', preprocess=np.transpose)
     if len(arr.shape) == 3:
         arr = arr.reshape(arr.shape + (1,))
     arr.to_hdf5(target, name)
     return len(os.listdir(source))
 
 
-def get_h5_dataset(path, val_part=0.25):
+def get_h5_dataset(path, pics_folder="out", val_part=0.25):
     path_files_list = os.path.join(path, "files_list.csv")
-    path_pics = os.path.join(path, "out/")
+    path_pics = os.path.join(path, pics_folder)
     path_out_data = os.path.join(path, "temp.h5")
     data_name = 'data'
     count = pics_to_h5(path_pics, path_out_data, data_name)
@@ -58,7 +58,7 @@ def main():
 
     del_previous_data(path)
 
-    get_h5_dataset(path, val_part=0.25)
+    get_h5_dataset(path, pics_folder="out_150x513", val_part=0.25)
 
 
 if __name__ == "__main__":

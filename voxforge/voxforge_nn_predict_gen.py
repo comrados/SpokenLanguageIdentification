@@ -3,6 +3,10 @@ from numpy.lib import stride_tricks
 import numpy as np
 from PIL import Image
 import scipy.io.wavfile as wav
+import os
+import shutil
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+import tensorflow as tf
 
 
 def stft(sig, frame_size, overlap_fac=0.75, window=np.hanning):
@@ -66,7 +70,7 @@ def logscale_spec(spec, sr=16000, factor=20., alpha=1.0, f0=0.9, fmax=1):
     return newspec, freqs
 
 
-def plotstft(audiopath, model, binsize=2 ** 10, name='tmp.png', alpha=1, img_size=None):
+def plotstft(audiopath, binsize=2 ** 10, name='tmp.png', alpha=1, img_size=None):
     """plot spectrogram"""
     samplerate, samples = wav.read(audiopath)
     # samples = samples[:, channel]
@@ -79,81 +83,86 @@ def plotstft(audiopath, model, binsize=2 ** 10, name='tmp.png', alpha=1, img_siz
 
     offset = np.random.randint(ims.shape[0] - 151)
 
-    # print(ims.shape)
-
     ims = ims[offset:offset + 150, 0:513]  # 0-11khz, ~9s interval
 
     ims = np.transpose(ims)
-
-    # print(ims.shape)
 
     image = Image.fromarray(ims)
     if img_size is not None:
         image = image.resize(img_size)
     image = image.convert('L')
-    return image
-    #image.show()
+    image.save(name)
 
 
-ru1 = r"D:\audios\ru\16000\1.wav"
-de1 = r"D:\audios\de\16000\drku171c.wav"
-audios = [ru1, de1]
+def get_wavs_from_dirs(dirs):
+    wavs = []
+    for d in dirs:
+        files = os.listdir(d)
+        for file in files:
+            if file.endswith('.wav'):
+                wavs.append(os.path.join(d, file))
+    return wavs
 
-model = tf.keras.models.load_model(r"D:\speechrecogn\model8.57-0.272-0.901.hdf5")
 
-imgs = []
+def generate_sprectra(audios, temp_path, count):
+    dic = {}
+    if not os.path.exists(os.path.join(temp_path, "out")):
+        os.makedirs(os.path.join(temp_path, "out"))
+    for idx, audio in enumerate(audios):
+        dic[idx] = audio
+        for i in range(count):
+            alpha = np.random.uniform(0.9, 1.1)
+            plotstft(audio, alpha=alpha, name=os.path.join(temp_path, "out", str(idx) + '_' +str(i) +'.png'))
+    return dic
 
-for audio in audios:
-    for i in range(10):
-        alpha = np.random.uniform(0.9, 1.1)
-        img = plotstft(audio, model, alpha=alpha)        
-        img = np.asarray(img)
-        img = np.transpose(img)
-        imgs.append(img)
 
-imgs = np.array(imgs)
-imgs = np.reshape(imgs, (imgs.shape + (1,)))
+def n_largest_setarr(a, n=1):
+    # a : Input array
+    # n : We want n-max element position to be set to 1
+    out = np.zeros_like(a)
+    out[np.arange(len(a)), np.argpartition(a,-n, axis=1)[:,-n]] = 1
+    return out
 
-res = model.predict(imgs, verbose=1)
 
-from tensorflow.keras.preprocessing.image import ImageDataGenerator
+def predict(model, path_predict, count, remove_temp=True):
+    predict_datagen = ImageDataGenerator(rescale=1./255)
+    predict_generator = predict_datagen.flow_from_directory(
+            path_predict,
+            target_size=(150, 513),
+            color_mode='grayscale',
+            shuffle=False,
+            class_mode='categorical',
+            batch_size=count)
+    res = model.predict_generator(predict_generator, verbose=1)
+    if remove_temp:
+        shutil.rmtree(path_predict)
+    fin = []    
+    for i in range (0, len(res), count):
+        t = res[i:i+count]
+        fin.append(np.sum(n_largest_setarr(t), axis=0)/count)        
+    fin = np.array(fin)
+    return fin
 
-path_predict = r"D:/speechrecogn/voxforge/pics"
 
-predict_datagen = ImageDataGenerator(rescale=1./255)
+def print_res(predicts, d):
+    for key, value in d.items():
+        print(predicts[key], ":", value)
 
-predict_generator = predict_datagen.flow_from_directory(
-        path_predict,
-        target_size=(150, 513),
-        color_mode='grayscale',
-        shuffle=False,
-        class_mode='categorical')
+def main():
+    ru1 = r"D:\audios\ru\16000"
+    de1 = r"D:\audios\de\16000"
+    dirs = [ru1, de1]
+    temp = r"D:\speechrecogn\temp"
+    
+    count = 10
+    wavs = get_wavs_from_dirs(dirs)
+    
+    dic = generate_sprectra(wavs, temp, count)    
+    model = tf.keras.models.load_model(r"D:\speechrecogn\model8.57-0.272-0.901.hdf5")    
+    res = predict(model, temp, count) 
+    
+    print_res(res, dic)
+    
+if __name__ == "__main__":
+    main()
 
-res = model.predict_generator(predict_generator, verbose=1)
-res = np.round_(res)
-
-import pandas as pd
-
-df = pd.DataFrame.from_csv(r"D:\speechrecogn\voxforge\pics\files_list.csv")
-
-df = np.asanyarray(pd.get_dummies(df['lang'])).astype(int)
-
-fin = np.subtract(res, df)
-
-np.sum(fin)
-
-model2 = tf.keras.models.load_model(r"D:\speechrecogn\model9.56-0.266-0.905.hdf5")
-
-import dask.array as da
-import os
-import h5py
-path = r"D:/speechrecogn/voxforge/pics/"
-x_va = da.from_array(h5py.File(os.path.join(path, "x_va.h5"))['x_va'], chunks=1000)
-y_va = da.from_array(h5py.File(os.path.join(path, "y_va.h5"))['y_va'], chunks=1000)
-
-res2 = model2.predict(x_va[0:150])
-
-yxyx = np.array(x_va[0])
-
-print(res2)
-print(np.array(y_va[0:150]))

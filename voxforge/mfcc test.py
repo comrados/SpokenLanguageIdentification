@@ -39,7 +39,6 @@ import datetime
 str(datetime.datetime.now())
 
 
-
 d = datetime.datetime(2018, 1, 1)
 print(d)
 

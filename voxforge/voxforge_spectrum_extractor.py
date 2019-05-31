@@ -97,12 +97,12 @@ def plotstft(audiopath, binsize=2 ** 10, name='tmp.png', alpha=1, quantity=1, im
     image.save(name)
 
 
-def convert_to_images2(path, img_size=None):
+def convert_to_images2(path, out="out", img_size=None, quantity=10):
     """converts wavs to images"""
     files_list = []
     audios_path = check_path([path, "audios"])
     pics_path = check_path([path, "pics"])
-    out_path = check_path([pics_path, "out"])
+    out_path = check_path([pics_path, out])
     max_count = get_min_files_count(audios_path)
     print('Max numbers of files wil be used:', max_count)
     for folder in os.listdir(audios_path):
@@ -136,14 +136,14 @@ def convert_to_images2(path, img_size=None):
     df.to_csv(os.path.join(pics_path, "files_list.csv"), index=False)
 
 
-def convert_to_images(path, validation_part=0.2, img_size=None):
+def convert_to_images(path, validation_part=0.2, img_size=None, quantity=10):
     """converts wavs to images"""
     audios_path = check_path([path, "audios"])
     pics_path = check_path([path, "pics"])
     pics_data_path = check_path([pics_path, "train"])
     pics_validation_path = check_path([pics_path, "validation"])
     max_count = get_min_files_count(audios_path)
-    print('Max numbers of files wil be used:', max_count)
+    print('Max numbers of files will be used:', max_count)
     for folder in os.listdir(audios_path):
         print("\nOutputting from folder:", folder.upper())
         lang_folder = check_path([audios_path, folder])
@@ -165,7 +165,6 @@ def convert_to_images(path, validation_part=0.2, img_size=None):
                     file_name, file_extension = os.path.splitext(file)
                     clear_output(wait=True)
                     print(folder.upper() + ' (' + str(count) + '/' + str(max_count) + '):', file, end='\r')
-                    quantity = 10
                     for idx in range(quantity):
                         if i < max_count * (1 - validation_part):
                             out_file = os.path.join(out_data_folder, file_name + "_" + str(idx) + ".png")
@@ -202,7 +201,8 @@ def get_min_files_count(audios_path):
 def main():
     path = r"D:/speechrecogn/voxforge/"
     #convert_to_images(path, validation_part=0.2, img_size=(150, 150))
-    convert_to_images2(path, img_size=(150, 150))
+    convert_to_images2(path, out="out_150x513", img_size=(150, 513))
+    #convert_to_images2(path, out="out_150x150", img_size=(150, 150))
 
 
 if __name__ == "__main__":
