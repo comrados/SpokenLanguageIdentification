@@ -95,6 +95,7 @@ def plotstft(audiopath, binsize=2 ** 10, name='tmp.png', alpha=1, img_size=None)
 
 
 def get_wavs_from_dirs(dirs):
+    "get all wavs from given directories"
     wavs = []
     for d in dirs:
         files = os.listdir(d)
@@ -105,6 +106,7 @@ def get_wavs_from_dirs(dirs):
 
 
 def generate_sprectra(audios, temp_path, count):
+    "generate random spectra of wav to feed into NN"
     dic = {}
     if not os.path.exists(os.path.join(temp_path, "out")):
         os.makedirs(os.path.join(temp_path, "out"))
@@ -117,6 +119,7 @@ def generate_sprectra(audios, temp_path, count):
 
 
 def n_largest_setarr(a, n=1):
+    "n-largest element of each row is set to 1, other elements - 0"
     # a : Input array
     # n : We want n-max element position to be set to 1
     out = np.zeros_like(a)
@@ -125,6 +128,7 @@ def n_largest_setarr(a, n=1):
 
 
 def predict(model, path_predict, count, remove_temp=True):
+    "predict label for picture"
     predict_datagen = ImageDataGenerator(rescale=1./255)
     predict_generator = predict_datagen.flow_from_directory(
             path_predict,
@@ -145,6 +149,7 @@ def predict(model, path_predict, count, remove_temp=True):
 
 
 def print_res(predicts, d):
+    "print results"
     for key, value in d.items():
         print(predicts[key], ":", value)
 

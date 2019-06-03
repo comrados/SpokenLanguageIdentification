@@ -7,6 +7,7 @@ import h5py
 
 
 def del_previous_data(path):
+    "removes old data files"
     try:
         os.remove(os.path.join(path, "temp.h5"))
         os.remove(os.path.join(path, "x_tr.h5"))
@@ -17,7 +18,8 @@ def del_previous_data(path):
         print(err)
 
 
-def pics_to_h5(source, target, name):    
+def pics_to_h5(source, target, name):
+    "array of pictures to h5"
     arr = dai.imread(source + '/*.png', preprocess=np.transpose)
     if len(arr.shape) == 3:
         arr = arr.reshape(arr.shape + (1,))
@@ -26,6 +28,7 @@ def pics_to_h5(source, target, name):
 
 
 def get_h5_dataset(path, pics_folder="out", val_part=0.25):
+    "create h5 file from directory with pictures"
     path_files_list = os.path.join(path, "files_list.csv")
     path_pics = os.path.join(path, pics_folder)
     path_out_data = os.path.join(path, "temp.h5")

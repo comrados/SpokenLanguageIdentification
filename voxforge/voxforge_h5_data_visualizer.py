@@ -7,6 +7,7 @@ import numpy as np
 
 
 def plot_samples(data, labels, shape=(2, 2)):
+    "plots random samples from h5 files"
     h = shape[0]
     w = shape[1]
     n = h * w
