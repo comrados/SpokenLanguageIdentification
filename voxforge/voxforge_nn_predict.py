@@ -92,7 +92,7 @@ def plotstft(audiopath, model, binsize=2 ** 10, name='tmp.png', alpha=1, img_siz
         image = image.resize(img_size)
     image = image.convert('L')
     return image
-    #image.show()
+    # image.show()
 
 
 ru1 = r"D:\audios\ru\16000\1.wav"
@@ -106,7 +106,7 @@ imgs = []
 for audio in audios:
     for i in range(10):
         alpha = np.random.uniform(0.9, 1.1)
-        img = plotstft(audio, model, alpha=alpha)        
+        img = plotstft(audio, model, alpha=alpha)
         img = np.asarray(img)
         img = np.transpose(img)
         imgs.append(img)
@@ -120,14 +120,14 @@ from tensorflow.keras.preprocessing.image import ImageDataGenerator
 
 path_predict = r"D:/speechrecogn/voxforge/pics"
 
-predict_datagen = ImageDataGenerator(rescale=1./255)
+predict_datagen = ImageDataGenerator(rescale=1. / 255)
 
 predict_generator = predict_datagen.flow_from_directory(
-        path_predict,
-        target_size=(150, 513),
-        color_mode='grayscale',
-        shuffle=False,
-        class_mode='categorical')
+    path_predict,
+    target_size=(150, 513),
+    color_mode='grayscale',
+    shuffle=False,
+    class_mode='categorical')
 
 res = model.predict_generator(predict_generator, verbose=1)
 res = np.round_(res)
@@ -147,6 +147,7 @@ model2 = tf.keras.models.load_model(r"D:\speechrecogn\model9.56-0.266-0.905.hdf5
 import dask.array as da
 import os
 import h5py
+
 path = r"D:/speechrecogn/voxforge/pics/"
 x_va = da.from_array(h5py.File(os.path.join(path, "x_va.h5"))['x_va'], chunks=1000)
 y_va = da.from_array(h5py.File(os.path.join(path, "y_va.h5"))['y_va'], chunks=1000)
