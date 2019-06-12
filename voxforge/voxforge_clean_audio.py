@@ -74,18 +74,41 @@ def plot(orig, signal, mask, s='title'):
     time.sleep(0.25)
 
 
+def mul_sig_silence(signal, min_silence):
+    k = 25000/max(abs(signal))
+    if k < 1:
+        return signal, min_silence
+    signal = (signal*k).astype(np.int16)
+    min_silence = int(min_silence*k)
+    return signal, min_silence
+
+
 def clean(signal, rate, low, hi, f, min_silence, len_part):
     if f == 'fft':
         signal = fft_filter(signal, rate, low, hi)
-    else:
+    if f == 'butter':
         signal = butter_bandpass_filter(signal, low, hi, rate, order=6)
     mask = envelope(signal, rate, min_silence, len_part)
     return signal, mask
 
 
-def clean_audio(path, out="audios_clean", one_folder=False, min_silence=200, silence_part=0.05, len_part=0.35,
-                f='butter', low=100, hi=7000, min_time=2, plotting=False):
-    """converts wavs to images"""
+def clean_audio(path, out="audios_clean", one_folder=False, min_silence=200, silence_part=0.01, len_part=0.1,
+                f='butter', low=100, hi=7000, min_time=3., amp_mag=True, plotting=False):
+    """
+    converts wavs to images
+    :param path audio files path
+    :param out output folder name
+    :param one_folder output to one ore multiple folders
+    :param min_silence minimum silence level
+    :param silence_part recalculated silence part from maximum value of amplitude (won't be less than min_silence)
+    :param len_part length in seconds of moving window for signal enveloping
+    :param f bandpass filter type ('butter' - butterworth, 'fft' - via fourier transform)
+    :param low frequency of filter's low pass
+    :param hi frequency of filter's high pass
+    :param min_time minimal length of processed audio to save
+    :param amp_mag amplitude magnification (multiplies audio signal amplitude to increase volume)
+    :param plotting plot original and modified signals
+    """
     files_list = []
     audios_path = check_path(path, "audios")
     out_path = check_path(path, out)
@@ -105,18 +128,21 @@ def clean_audio(path, out="audios_clean", one_folder=False, min_silence=200, sil
                     rate, signal = wav.read(file_path)
                     signal_orig = signal
 
-                    if max(signal) <= min_silence:
+                    if max(abs(signal)) <= min_silence:
                         continue
 
-                    if max(signal) * silence_part * 0.1 > min_silence:
-                        min_silence = max(signal) * silence_part * 0.1
-
-                    signal, mask = clean(signal, rate, low, hi, f, min_silence, len_part)
+                    if max(abs(signal)) * silence_part > min_silence:
+                        min_silence = max(abs(signal)) * silence_part
+                    
+                    if amp_mag:
+                        signal, scaled_min_silence = mul_sig_silence(signal, min_silence)
+                    
+                    signal, mask = clean(signal, rate, low, hi, f, scaled_min_silence, len_part)
 
                     ratio = len(signal[mask]) / len(signal)
                     if ratio <= 0.3 or len(signal[mask]) < int(rate * min_time):
                         continue
-                    s = '{:.2f}'.format(ratio) + ' {:.2f}'.format(min_silence) + ' ' + file
+                    s = '{:.2f}'.format(ratio) + ' {:.2f}'.format(scaled_min_silence) + ' ' + file
                     print(s)
                     if plotting:
                         plot(signal_orig, signal, mask, s=s)
@@ -140,8 +166,8 @@ def check_path(*elements):
 
 def main():
     path = r"D:/speechrecogn/voxforge/"
-    clean_audio(path, out="audios_clean", one_folder=False, min_silence=200, silence_part=0.1, len_part=0.35,
-                min_time=2, low=100, hi=7000, plotting=False)
+    clean_audio(path, out="audios_clean", one_folder=False, min_silence=200, silence_part=0.01, len_part=0.25,
+                min_time=2.5, low=100, hi=7000, amp_mag=True, plotting=False)
 
 
 if __name__ == "__main__":
