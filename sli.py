@@ -1,11 +1,29 @@
 import sli
 
 links = {'de': "http://www.repository.voxforge1.org/downloads/de/Trunk/Audio/Main/16kHz_16bit/",
-             'en': "http://www.repository.voxforge1.org/downloads/SpeechCorpus/Trunk/Audio/Main/16kHz_16bit/",
-             'ru': "http://www.repository.voxforge1.org/downloads/Russian/Trunk/Audio/Main/16kHz_16bit/"}
+         'en': "http://www.repository.voxforge1.org/downloads/SpeechCorpus/Trunk/Audio/Main/16kHz_16bit/",
+         'ru': "http://www.repository.voxforge1.org/downloads/Russian/Trunk/Audio/Main/16kHz_16bit/"}
+path = r"D:/speechrecogn/voxforge/"
+audios = "audios"
+archives = "archives"
 
-out_path = r"D:/speechrecogn/voxforge/audios/"
+crawler = sli.VoxforgeAudioCrawler(links, path, audios, archives, limit=7, extraction_mode='many')
+dirty = crawler.crawl()
 
-crawler = sli.VoxforgeAudioCrawler(links, out_path, limit=7)
 
-crawler.crawl()
+audios_clean = "audios_clean"
+one_folder = True
+min_silence = 200
+silence_part = 0.01
+len_part = 0.25
+min_time = 2.5
+f = 'butter'
+low = 100
+hi = 7000
+amp_mag = True
+plotting = False
+
+
+cleaner = sli.AudioCleaner(path, dirty, audios_clean, one_folder, min_silence, silence_part, len_part, min_time, f, low, hi,
+                           amp_mag, plotting)
+clean = cleaner.clean()

@@ -71,7 +71,7 @@ def plot(orig, signal, mask, s='title'):
     plt.plot(signal, alpha=0.75, label='converted')
     plt.legend()
     plt.show()
-    time.sleep(0.01)
+    time.sleep(0.1)
 
 
 def mul_sig_silence(signal, min_silence):

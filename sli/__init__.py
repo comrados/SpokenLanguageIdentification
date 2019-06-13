@@ -1,1 +1,2 @@
 from .audio_voxforge_crawler import VoxforgeAudioCrawler
+from .audio_cleaner import AudioCleaner
