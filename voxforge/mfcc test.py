@@ -1,105 +1,87 @@
-from python_speech_features import mfcc
+import librosa as lr
+
+import matplotlib.pyplot as plt
 import scipy.io.wavfile as wav
-import matplotlib.pyplot as plt
-from pydub import AudioSegment
-import uuid
-from PIL import Image
-
-audio = AudioSegment.from_wav(r"D:/speechrecogn/voxforge/audios\ru\wav\uvgeek-20150608-etf-ru_0089.wav")
-
-data = np.array(audio.get_array_of_samples())/audio.max_possible_amplitude
-
-(rate,sig) = wav.read(file_path)
-mfcc_feat = mfcc(sig,rate)
-
-print(mfcc_feat)
-plt.plot(mfcc_feat)
-plt.show()
-
-import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib import cm
-
-(rate,sig) = wav.read(file_path)
-mfcc_feat = mfcc(sig,rate, nfft=1024)
-
-ig, ax = plt.subplots()
-mfcc_data= np.swapaxes(mfcc_feat, 0 ,1)
-cax = ax.imshow(mfcc_data, interpolation='nearest', cmap=cm.coolwarm, origin='lower', aspect='auto')
-ax.set_title('MFCC')
-#Showing mfcc_data
-plt.show()
-#Showing mfcc_feat
-plt.plot(mfcc_feat)
-plt.show()
+import random
 
 
-import datetime
+def normalize(arr):
+    max_value = np.max(arr)
+    min_value = np.min(arr)
+    for i in range(len(arr)):
+        arr[i] = (arr[i] - min_value) / (max_value - min_value)
+    return arr
 
-str(datetime.datetime.now())
+def scale(arr, k):
+    arr = arr*k
+    return arr.astype(np.int32)
+
+def get_patches(spec, n, l):
+    h, w = spec.shape
+    patches = []
+    offsets = []
+    i = 0
+    while i < n:
+        offset = random.randint(0, w-l-1)
+        if offset in offsets:
+            continue
+        else:
+            i += 1
+            offsets.append(offset)
+            offsets.append(offset+l)
+            patches.append(spec[:,offset:offset+l])
+    return patches, offsets
+
+def plot_patches(patches):    
+    for i in range(1, len(patches)+1):
+        plt.subplot(1, len(patches), i)
+        plt.axis('off')
+        plt.imshow(patches[i-1], origin="lower")
+    plt.show()
+    
+def plot_spec(spec, offsets):
+    new = np.copy(spec)
+    new[:,offsets] = 255
+    plt.subplot(2, 1, 1)
+    plt.imshow(new, origin="lower")
+    plt.axis('off')
+    plt.subplot(2, 1, 2)
+    plt.axis('off')
+    plt.imshow(spec, origin="lower")
+    plt.show()
+
+audio_paths = [r"D:/speechrecogn/voxforge/audios_clean\ru_kn0pka-20110505-hic-ru_0034.wav",
+               r"D:/speechrecogn/voxforge/audios_clean\de_Black_Galaxy-20080530-xzb-de11-101.wav"]
+
+n_mels=100
+min_time = 2.5
+time = 25
+min_frames = int(min_time*1000/time)
+
+nn_frame_width = 1
+patch_width = int(nn_frame_width*1000/time)
 
 
-d = datetime.datetime(2018, 1, 1)
-print(d)
-
-while d < datetime.datetime(2018, 1, 2):
-    d += datetime.timedelta(minutes=15)
-    print(d)
-
-t1 = (1, 2, 3 ,4)
-t2 = (100,) + t1 + (100,)
-
-
-from scipy import signal
-import matplotlib.pyplot as plt
-from pydub import AudioSegment
-import scipy.io.wavfile as wav
-
-file = r"D:/speechrecogn/voxforge/audios\ru\wav\uvgeek-20150608-etf-ru_0089.wav"
-
-audio = AudioSegment.from_wav(file)
-samplerate, samples = wav.read(file)
-
-samples = samples / 32768.0
-print(max(samples))
-
-f, t, Sxx = signal.spectrogram(samples, 16000)
-plt.pcolormesh(t, f, Sxx)
-plt.ylabel('Frequency [Hz]')
-plt.xlabel('Time [sec]')
-plt.show()
-
-di = 11
-dsi = uuid.UUID("00000000-0000-0000-0000-000000000000")
-print(str(dsi))
-tu = (214353, 3465432)
-limit = "LIMIT 10000"
-
-params = {"di": str(di), "dsi": str(dsi), "from": str(tu[0]), "to": str(tu[1]), "limit": limit}
-
-print(params)
-
-query = "SELECT * FROM data WHERE device_id={di} ".format(**params)
-query += "and data_source_id={dsi} ".format(**params)
-query += "and time_upload >= '{from}' and time_upload < '{to}' ".format(**params)
-query += "{limit} ALLOW FILTERING".format(**params)
-
-print(query)
-
-query = "SELECT * FROM data WHERE device_id={di} and data_source_id={dsi} and time_upload >= '{from}' and time_upload < '{to}' {limit} ALLOW FILTERING".format(**params)
-
-print(query)
-
-x1 = [123, 123,5456]
-x2=['asd', 'fgb', 'klojkhg']
-
-y = [(123,564),(43,76),(987,545)] 
-y = list(y)
-
-x2.extend(x1)
-
-x3 = list(x1)
-
-'%.4f' % 25.5
-
-img = Image.open(r"D:\speechrecogn\voxforge\pics\train\en\1028-20100710-hne-ar-03_1.png")
+for audio_path in audio_paths:
+    plt.set_cmap('viridis')
+    
+    sr, y = wav.read(audio_path)
+    hop = int(sr/1000*time)
+    
+    y =  y.astype(np.float32)
+    
+    spec = lr.feature.melspectrogram(y, n_mels=n_mels, hop_length=hop)
+    img = lr.core.amplitude_to_db(spec)
+    
+    img = np.abs(img)
+    
+    norm = normalize(img)
+    scaled = scale(norm, 255)
+    
+    patches, offsets = get_patches(scaled, 3, patch_width)
+    plot_patches(patches)   
+    
+    plot_spec(scaled, offsets)
+    
+    plt.imsave(r"D:/test.png", scaled)

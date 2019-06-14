@@ -13,7 +13,7 @@ dirty = crawler.crawl()
 
 audios_clean = "audios_clean"
 one_folder = True
-min_silence = 200
+min_silence = 225
 silence_part = 0.01
 len_part = 0.25
 min_time = 2.5

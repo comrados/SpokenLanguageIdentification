@@ -123,3 +123,19 @@ plot_signal_with_envelope(samples_o, ansig)
 plt.plot(samples_o[60000:60100])
 plt.plot(amplitude_envelope[60000:60100])
 plt.show()
+
+###############################################################################
+
+df = pd.read_csv(r"D:\speechrecogn\voxforge\audios_list.csv")
+
+for index, row in df.iterrows():
+    file = row['file']
+    basename = os.path.basename(file)
+    lang = row ['lang']
+    
+import random
+
+#random.seed(0)
+
+for i in range(10):    
+    print(random.randint(0, 101))

@@ -3,7 +3,7 @@ import scipy.io.wavfile as wav
 import os
 import pandas as pd
 from scipy.fftpack import fft, ifft, fftfreq
-from scipy.signal import butter, lfilter
+from scipy.signal import butter, filtfilt
 from . import utils
 
 import matplotlib.pyplot as plt
@@ -47,7 +47,7 @@ def _butter_bandpass(lowcut, highcut, fs, order=5):
 def _butter_bandpass_filter(signal, rate, low, hi, order=6):
     """butterwoth bandpass filter"""
     b, a = _butter_bandpass(low, hi, rate, order=order)
-    y = lfilter(b, a, signal)
+    y = filtfilt(b, a, signal)
     return y.astype(np.int16)
 
 
@@ -63,7 +63,9 @@ def _mul_sig_silence(signal, min_silence):
 
 class AudioCleaner:
 
-    def __init__(self, path, audios_dirty, audios_clean="audios_clean", one_folder=False, min_silence=200, silence_part=0.01, len_part=0.25, min_time=2.5, f='butter', low=100, hi=7000, amp_mag=True, plotting=False):
+    def __init__(self, path, audios_dirty, audios_clean="audios_clean", one_folder=False, min_silence=200,
+                 silence_part=0.01, len_part=0.25, min_time=2.5, f='butter', low=100, hi=7000, amp_mag=True,
+                 plotting=False):
         """
         :param path: working path
         :param audios_dirty: path to file-lang correspondence csv-file
@@ -153,7 +155,7 @@ class AudioCleaner:
         ratio = len(signal[mask]) / len(signal)
 
         if len(signal[mask]) < int(rate * min_time):
-            print('TOO SHORT:', '{:.2f}'.format(len(signal[mask])/rate), os.path.basename(file))
+            print('TOO SHORT:', '{:.2f}'.format(len(signal[mask]) / rate), os.path.basename(file))
             return
 
         s = '{:.2f}'.format(ratio) + ' {:.2f}'.format(scaled_min_silence) + ' ' + file

@@ -3,7 +3,7 @@ import scipy.io.wavfile as wav
 import os
 import pandas as pd
 from scipy.fftpack import fft, ifft, fftfreq
-from scipy.signal import butter, lfilter
+from scipy.signal import butter, filtfilt
 
 import matplotlib.pyplot as plt
 import time
@@ -59,7 +59,7 @@ def butter_bandpass(lowcut, highcut, fs, order=5):
 def butter_bandpass_filter(data, lowcut, highcut, fs, order=5):
     """butterwoth bandpass filter"""
     b, a = butter_bandpass(lowcut, highcut, fs, order=order)
-    y = lfilter(b, a, data)
+    y = filtfilt(b, a, data)
     return y.astype(np.int16)
 
 
