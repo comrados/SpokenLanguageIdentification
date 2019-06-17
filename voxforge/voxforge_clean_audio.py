@@ -11,16 +11,12 @@ import time
 
 def envelope(y, rate, threshold, len_part):
     """moving average window"""
+    global mask2
+    global mask
     mask = []
     y = pd.Series(y).apply(np.abs)
     y_mean = y.rolling(window=int(rate * len_part), min_periods=1, center=True).mean()
-    for mean in y_mean:
-        if mean > threshold:
-            mask.append(True)
-        else:
-            mask.append(False)
-    return mask
-
+    return np.where(y_mean > threshold, True, False)
 
 def calc_fft(rate, samples):
     """calculate fft and frequencies"""
@@ -63,12 +59,12 @@ def butter_bandpass_filter(data, lowcut, highcut, fs, order=5):
     return y.astype(np.int16)
 
 
-def plot(orig, signal, mask, s='title'):
+def plot(orig, signal, mask, rate, s='title'):
     """plot signals"""
-    plt.title(s)
-    plt.plot(orig, alpha=0.75, label='orig')
-    signal[np.invert(mask)] = 0
-    plt.plot(signal, alpha=0.75, label='converted')
+    plt.title(s)   
+    plt.plot(np.arange(len(signal))[mask]/rate, signal[mask], 'lime', alpha=0.5, label='converted')
+    plt.plot(np.arange(len(orig))/rate, orig, 'blue', alpha=0.5, label='orig')
+    plt.grid()
     plt.legend()
     plt.show()
     time.sleep(0.1)
@@ -137,7 +133,7 @@ def output(out_path, file, res, min_time, plotting):
     s = '{:.2f}'.format(ratio) + ' {:.2f}'.format(scaled_min_silence) + ' ' + file
     print(s)
     if plotting:
-        plot(signal_orig, signal, mask, s=s)
+        plot(signal_orig, signal, mask, rate, s=s)
     wav.write(os.path.join(out_path, file), rate, signal[mask])
 
 

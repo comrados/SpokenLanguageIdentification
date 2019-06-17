@@ -1,4 +1,5 @@
 import numpy as np
+import librosa
 import scipy.io.wavfile as wav
 import os
 import pandas as pd
@@ -20,10 +21,10 @@ def _calc_fft(rate, samples):
 
 def _cut_freq(fft, freq, low, hi):
     """nullify fft frequencies that larger and smaller than thresholds"""
-    idxs = freq >= hi
-    fft[idxs] = 0
-    idxs = freq <= low
-    fft[idxs] = 0
+    ids = freq >= hi
+    fft[ids] = 0
+    ids = freq <= low
+    fft[ids] = 0
     return fft
 
 
@@ -32,7 +33,7 @@ def _fft_filter(signal, rate, low, hi):
     signal_fft, freq = _calc_fft(rate, signal)
     filtered_fft = _cut_freq(signal_fft, freq, low, hi)
     signal_ifft = ifft(filtered_fft)
-    return signal_ifft.real.astype(np.int16)
+    return signal_ifft.real
 
 
 def _butter_bandpass(lowcut, highcut, fs, order=5):
@@ -48,24 +49,45 @@ def _butter_bandpass_filter(signal, rate, low, hi, order=6):
     """butterwoth bandpass filter"""
     b, a = _butter_bandpass(low, hi, rate, order=order)
     y = filtfilt(b, a, signal)
-    return y.astype(np.int16)
+    return y
 
 
 def _mul_sig_silence(signal, min_silence):
     """scales signals (and silence values)"""
-    k = 25000 / max(abs(signal))
-    if k < 1:
-        return signal, min_silence
-    signal = (signal * k).astype(np.int16)
-    min_silence = int(min_silence * k)
+    k = 0.9 / np.max(np.abs(signal))
+    signal = (signal * k)
+    min_silence = min_silence * k
     return signal, min_silence
+
+
+def _plot(orig, signal, mask, rate, s='title'):
+    """plot signals"""
+    plt.title(s)
+    plt.plot(np.arange(len(signal))[mask] / rate, signal[mask], 'lime', alpha=0.5, label='converted')
+    plt.plot(np.arange(len(orig)) / rate, orig, 'blue', alpha=0.5, label='orig')
+    plt.grid()
+    plt.legend()
+    plt.show()
+    time.sleep(0.1)
+
+
+def _convert_to_16bit_pcm(signal):
+    if 0.0 <= np.max(np.abs(signal)) <= 1.0:
+        ids = signal >= 0
+        signal[ids] = signal[ids] * 32767
+        ids = signal < 0
+        signal[ids] = signal[ids] * 32768
+    return signal.astype(np.int16)
+
+
+def _save_audio(path, rate, signal):
+    wav.write(path, rate, _convert_to_16bit_pcm(signal))
 
 
 class AudioCleaner:
 
-    def __init__(self, path, audios_dirty, audios_clean="audios_clean", one_folder=False, min_silence=200,
-                 silence_part=0.01, len_part=0.25, min_time=2.5, f='butter', low=100, hi=7000, amp_mag=True,
-                 plotting=False):
+    def __init__(self, path, audios_dirty, audios_clean="audios_clean", one_folder=False, min_silence=0.01,
+                 len_part=0.25, min_time=2.5, f='butter', low=100, hi=7000, amp_mag=True, plotting=False):
         """
         :param path: working path
         :param audios_dirty: path to file-lang correspondence csv-file
@@ -86,7 +108,6 @@ class AudioCleaner:
         self.audios_clean = audios_clean
         self.one_folder = one_folder
         self.min_silence = min_silence
-        self.silence_part = silence_part
         self.len_part = len_part
         self.min_time = min_time
         self.f = f
@@ -98,25 +119,9 @@ class AudioCleaner:
 
     def _envelope(self, signal, rate, threshold):
         """moving average window"""
-        mask = []
         signal = pd.Series(signal).apply(np.abs)
         signal_means = signal.rolling(window=int(rate * self.len_part), min_periods=1, center=True).mean()
-        for mean in signal_means:
-            if mean > threshold:
-                mask.append(True)
-            else:
-                mask.append(False)
-        return mask
-
-    def _plot(self, orig, signal, mask, s='title'):
-        """plot signals"""
-        plt.title(s)
-        plt.plot(self, orig, alpha=0.75, label='orig')
-        signal[np.invert(mask)] = 0
-        plt.plot(signal, alpha=0.75, label='converted')
-        plt.legend()
-        plt.show()
-        time.sleep(0.1)
+        return np.where(signal_means > threshold, True, False)
 
     def _apply_filter(self, signal, rate, min_silence):
         """applies filter"""
@@ -131,21 +136,20 @@ class AudioCleaner:
         """
         cleans audio file
         """
-        rate, signal = wav.read(file_path)
-        signal_orig = signal
+        signal, rate = librosa.core.load(file_path, sr=None)
+        signal_orig = np.copy(signal)
 
-        if max(abs(signal)) <= self.min_silence:
+        if np.max(np.abs(signal)) <= self.min_silence:
             print('TOO QUIET:', os.path.basename(file_path))
             return
 
+        # filter
+        signal, mask = self._apply_filter(signal, rate, self.min_silence)
+
+        # amplitude magnification
         scaled_min_silence = self.min_silence
-        if max(abs(signal)) * self.silence_part > scaled_min_silence:
-            scaled_min_silence = max(abs(signal)) * self.silence_part
-
         if self.amp_mag:
-            signal, scaled_min_silence = _mul_sig_silence(signal, scaled_min_silence)
-
-        signal, mask = self._apply_filter(signal, rate, scaled_min_silence)
+            signal, scaled_min_silence = _mul_sig_silence(signal, self.min_silence)
 
         return signal_orig, signal, mask, rate, scaled_min_silence
 
@@ -158,11 +162,11 @@ class AudioCleaner:
             print('TOO SHORT:', '{:.2f}'.format(len(signal[mask]) / rate), os.path.basename(file))
             return
 
-        s = '{:.2f}'.format(ratio) + ' {:.2f}'.format(scaled_min_silence) + ' ' + file
+        s = '{:.2f}'.format(ratio) + ' {:.4f}'.format(scaled_min_silence) + ' ' + file
         print(s)
         if plotting:
-            self._plot(signal_orig, signal, mask, s=s)
-        wav.write(os.path.join(out_path, file), rate, signal[mask])
+            _plot(signal_orig, signal, mask, rate, s=s)
+        _save_audio(os.path.join(out_path, file), rate, signal[mask])
         self.file_lang_list.append({'file': os.path.join(out_path, file), 'lang': lang})
 
     def clean(self):

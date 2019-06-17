@@ -139,3 +139,75 @@ import random
 
 for i in range(10):    
     print(random.randint(0, 101))
+
+###############################################################################
+
+import librosa
+
+def plot(*series, alpha=0.5):
+    for s in series:
+        plt.plot(s, alpha=alpha)
+    plt.grid()
+    plt.show()
+
+def plot_drc(threshold=-35, scale=2, direction='upward'):
+    dbs = np.linspace(-0.1, -100, num=1000)
+    new = np.linspace(-0.1, -100, num=1000)
+    if direction is 'downward':
+        mask = np.where(new > threshold, True, False)
+    else:
+        mask = np.where(new < threshold, True, False)
+    new[mask] = new[mask]*scale-threshold*(scale-1)    
+    plt.plot(dbs, new)
+    plt.grid()
+    plt.show()
+
+plot_drc(threshold=-35, scale=0, direction='downward')
+plot_drc(threshold=-35, scale=0, direction='upward')
+
+def dynamic_range_compression(dbs, threshold, scale=2, direction='upward'):
+    new = np.copy(dbs)
+    if direction is 'downward':
+        mask = np.where(new > threshold, True, False)        
+    else:
+        mask = np.where(new < threshold, True, False)
+    new[mask] = new[mask]*scale-threshold*(scale-1)
+    return new
+
+clean_path = r"D:/speechrecogn/voxforge/audios_clean"
+orig_path = r"D:/speechrecogn/voxforge/audios"
+
+file = r"kn0pka-20110505-hic-ru_0030.wav"
+#file = r"Leonid-20130928-kfg-ru_0014.wav"
+
+orig = os.path.join(orig_path, lang, 'wav', file)
+clean = os.path.join(clean_path, lang, file)
+
+samples, rate = librosa.core.load(clean, sr=None)
+
+a_s = np.abs(samples)
+
+mask = np.where(samples < 0, True, False)
+
+dbs = librosa.core.amplitude_to_db(samples)
+
+dbs_new = dynamic_range_compression(dbs, -35, 0, direction='upward')
+dbs_new = dynamic_range_compression(dbs_new, -35, 1.1, direction='downward')
+
+plot(samples*10, dbs, dbs_new)
+plot(dbs-dbs_new)
+
+amps = librosa.core.db_to_amplitude(dbs)
+amps_new = librosa.core.db_to_amplitude(dbs_new)
+
+amps[mask] = amps[mask]*(-1)
+amps_new[mask] = amps_new[mask]*(-1)
+
+plot(amps, amps_new)
+
+plot(amps-amps_new)
+
+librosa.output.write_wav(r"D:/test_rosa.wav", amps, rate)
+librosa.output.write_wav(r"D:/test_rosa_new.wav", amps_new, rate)
+
+np.mean(dbs)
