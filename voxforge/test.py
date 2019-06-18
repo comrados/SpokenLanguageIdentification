@@ -143,6 +143,9 @@ for i in range(10):
 ###############################################################################
 
 import librosa
+import numpy as np
+import matplotlib.pyplot as plt
+import os
 
 def plot(*series, alpha=0.5):
     for s in series:
@@ -162,8 +165,8 @@ def plot_drc(threshold=-35, scale=2, direction='upward'):
     plt.grid()
     plt.show()
 
-plot_drc(threshold=-35, scale=0, direction='downward')
-plot_drc(threshold=-35, scale=0, direction='upward')
+plot_drc(threshold=-35, scale=1.5, direction='downward')
+plot_drc(threshold=-35, scale=5, direction='upward')
 
 def dynamic_range_compression(dbs, threshold, scale=2, direction='upward'):
     new = np.copy(dbs)
@@ -176,6 +179,7 @@ def dynamic_range_compression(dbs, threshold, scale=2, direction='upward'):
 
 clean_path = r"D:/speechrecogn/voxforge/audios_clean"
 orig_path = r"D:/speechrecogn/voxforge/audios"
+lang = 'ru'
 
 file = r"kn0pka-20110505-hic-ru_0030.wav"
 #file = r"Leonid-20130928-kfg-ru_0014.wav"
@@ -191,8 +195,8 @@ mask = np.where(samples < 0, True, False)
 
 dbs = librosa.core.amplitude_to_db(samples)
 
-dbs_new = dynamic_range_compression(dbs, -35, 0, direction='upward')
-dbs_new = dynamic_range_compression(dbs_new, -35, 1.1, direction='downward')
+dbs_new = dynamic_range_compression(dbs, -35, 5, direction='upward')
+#dbs_new = dynamic_range_compression(dbs_new, -35, 1.1, direction='downward')
 
 plot(samples*10, dbs, dbs_new)
 plot(dbs-dbs_new)
@@ -211,3 +215,6 @@ librosa.output.write_wav(r"D:/test_rosa.wav", amps, rate)
 librosa.output.write_wav(r"D:/test_rosa_new.wav", amps_new, rate)
 
 np.mean(dbs)
+
+###############################################################################
+

@@ -53,15 +53,14 @@ def _to_wav(file, name, ext):
     return new_name
 
 
-class VoxforgeAudioCrawler:
+class AudioCrawlerVoxforge:
 
-    def __init__(self, links_dict, path, audios="audios", archives="archives", limit=100, seed=None,
-                 extraction_mode='one'):
-
+    def __init__(self, links_dict: dict, path: str, audios: str = "audios", archives="archives", limit: int = 100,
+                 seed: int = None, extraction_mode: str = 'one'):
         """
-        initialize audio downloader
+        Initialize audio downloader
 
-        :param links_dict: dictionary with links of format: {'lang': '"http://www.link.com'}
+        :param links_dict: dictionary with links of format: {'ln1': '"http://link1.com', 'ln2': '"http://link2.com'}
         :param path: working path
         :param audios: folder for extracted wav-files (will be created in given path)
         :param archives: folder for downloaded archives with audios
@@ -91,7 +90,6 @@ class VoxforgeAudioCrawler:
         """parse given link to find all files, matching the pattern, download files"""
 
         for lang, url in self.links_dict.items():
-
             out = utils.check_path(self.out_path, lang, self.archives)
 
             files = _get_file_names_from_url(url)

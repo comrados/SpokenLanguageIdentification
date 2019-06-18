@@ -7,7 +7,7 @@ path = r"D:/speechrecogn/voxforge/"
 audios = "audios"
 archives = "archives"
 
-crawler = sli.VoxforgeAudioCrawler(links, path, audios, archives, limit=7, extraction_mode='many')
+crawler = sli.AudioCrawlerVoxforge(links, path, audios, archives, limit=7, extraction_mode='many')
 dirty = crawler.crawl()
 
 
@@ -20,9 +20,16 @@ f = 'butter'
 low = 100
 hi = 7000
 amp_mag = True
+drc = False
+drc_param = [(5, 'up'), (1.1, 'down')]
 plotting = False
 
 
 cleaner = sli.AudioCleaner(path, dirty, audios_clean, one_folder, min_silence, len_part, min_time, f, low, hi,
-                           amp_mag, plotting)
+                           amp_mag, drc, drc_param, plotting)
 clean = cleaner.clean()
+
+
+spectre = sli.AudioSpectrumExtractor(path, clean, "audio_spec", save_full_spec="audio_spec_full")
+
+spectre.extract()

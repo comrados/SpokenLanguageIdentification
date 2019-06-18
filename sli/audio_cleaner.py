@@ -72,35 +72,55 @@ def _plot(orig, signal, mask, rate, s='title'):
 
 
 def _convert_to_16bit_pcm(signal):
-    if 0.0 <= np.max(np.abs(signal)) <= 1.0:
-        ids = signal >= 0
-        signal[ids] = signal[ids] * 32767
-        ids = signal < 0
-        signal[ids] = signal[ids] * 32768
+    """convert floating point wav to 16-bit pcm"""
+    ids = signal >= 0
+    signal[ids] = signal[ids] * 32767
+    ids = signal < 0
+    signal[ids] = signal[ids] * 32768
     return signal.astype(np.int16)
 
 
 def _save_audio(path, rate, signal):
-    wav.write(path, rate, _convert_to_16bit_pcm(signal))
+    """save audio with optional conversion to 16-bit pcm"""
+    if 0.0 <= np.max(np.abs(signal)) <= 1.0:
+        wav.write(path, rate, _convert_to_16bit_pcm(signal))
+    else:
+        wav.write(path, rate, signal)
+
+
+def _drc_hard_knee(dbs, threshold, scale=2, direction='up'):
+    """hard knee dynamic range compression filter"""
+    new = np.copy(dbs)
+    if direction is 'down':
+        mask = np.where(new > threshold, True, False)
+    else:
+        mask = np.where(new < threshold, True, False)
+    new[mask] = new[mask] * scale - threshold * (scale - 1)
+    return new
 
 
 class AudioCleaner:
 
-    def __init__(self, path, audios_dirty, audios_clean="audios_clean", one_folder=False, min_silence=0.01,
-                 len_part=0.25, min_time=2.5, f='butter', low=100, hi=7000, amp_mag=True, plotting=False):
+    def __init__(self, path: str, audios_dirty: str, audios_clean: str = "audios_clean", one_folder: bool = False,
+                 min_silence: float = 0.01, len_part: float = 0.25, min_time: float = 2.5, f: str = 'butter',
+                 low: float = 100., hi: float = 7000., amp_mag: bool = True, drc: bool = False, drc_param: list = None,
+                 plotting: bool = False):
         """
+        Initialize audio cleaner
+
         :param path: working path
         :param audios_dirty: path to file-lang correspondence csv-file
         :param audios_clean: output folder name (will be created in path)
         :param one_folder: output to one or multiple (the resulting number of folders equals to number of languages)
-        :param min_silence: minimum silence level
-        :param silence_part: recalculated silence part from maximum value of amplitude (won't be less than min_silence)
+        :param min_silence: minimum silence level (0.0 to 1.0)
         :param len_part: length in seconds of moving window for signal enveloping
         :param f: bandpass filter type ('butter' - butterworth, 'fft' - via fourier transform)
         :param low: frequency of filter's lowcut
         :param hi: frequency of filter's highcut
         :param min_time: minimal length of processed audio to save
         :param amp_mag: amplitude magnification (multiplies audio signal amplitude to increase volume)
+        :param drc: toggle dynamic range compression (DRC)
+        :param drc_param: DRC parameters array of tuples [(scale1, direction1)] (e.g.: [(5, 'up'), (1.1, 'down')])
         :param plotting: plot original and modified signals
         """
         self.path = path
@@ -114,6 +134,8 @@ class AudioCleaner:
         self.low = low
         self.hi = hi
         self.amp_mag = amp_mag
+        self.drc = drc
+        self.drc_param = drc_param
         self.plotting = plotting
         self.file_lang_list = []
 
@@ -132,12 +154,33 @@ class AudioCleaner:
         mask = self._envelope(signal, rate, min_silence)
         return signal, mask
 
+    def _dynamic_range_compression(self, signal):
+        """dynamic range compression"""
+        mask = np.where(signal < 0, True, False)
+
+        dbs = librosa.core.amplitude_to_db(signal)
+        threshold = np.mean(dbs)
+
+        if not self.drc_param:
+            return signal
+
+        for param in self.drc_param:
+            dbs = _drc_hard_knee(dbs, threshold, param[0], direction=param[1])
+
+        amps_new = librosa.core.db_to_amplitude(dbs)
+        amps_new[mask] = amps_new[mask] * (-1)
+        return amps_new
+
     def _clean_audio(self, file_path):
         """
         cleans audio file
         """
         signal, rate = librosa.core.load(file_path, sr=None)
         signal_orig = np.copy(signal)
+
+        # dynamic range compression
+        if self.drc:
+            signal = self._dynamic_range_compression(signal)
 
         if np.max(np.abs(signal)) <= self.min_silence:
             print('TOO QUIET:', os.path.basename(file_path))
