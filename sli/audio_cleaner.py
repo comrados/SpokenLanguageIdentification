@@ -104,7 +104,7 @@ class AudioCleaner:
     def __init__(self, path: str, audios_dirty: str, audios_clean: str = "audios_clean", one_folder: bool = False,
                  min_silence: float = 0.01, len_part: float = 0.25, min_time: float = 2.5, f: str = 'butter',
                  low: float = 100., hi: float = 7000., amp_mag: bool = True, drc: bool = False, drc_param: list = None,
-                 plotting: bool = False):
+                 plotting: bool = False, verbose: bool = False):
         """
         Initialize audio cleaner
 
@@ -122,6 +122,7 @@ class AudioCleaner:
         :param drc: toggle dynamic range compression (DRC)
         :param drc_param: DRC parameters array of tuples [(scale1, direction1)] (e.g.: [(5, 'up'), (1.1, 'down')])
         :param plotting: plot original and modified signals
+        :param verbose: verbose output
         """
         self.path = path
         self.audios_dirty = audios_dirty
@@ -138,6 +139,7 @@ class AudioCleaner:
         self.drc_param = drc_param
         self.plotting = plotting
         self.file_lang_list = []
+        self.verbose = verbose
 
     def _envelope(self, signal, rate, threshold):
         """moving average window"""
@@ -183,7 +185,8 @@ class AudioCleaner:
             signal = self._dynamic_range_compression(signal)
 
         if np.max(np.abs(signal)) <= self.min_silence:
-            print('TOO QUIET:', os.path.basename(file_path))
+            if self.verbose:
+                print('TOO QUIET:', os.path.basename(file_path), end="\r")
             return
 
         # filter
@@ -202,11 +205,13 @@ class AudioCleaner:
         ratio = len(signal[mask]) / len(signal)
 
         if len(signal[mask]) < int(rate * min_time):
-            print('TOO SHORT:', '{:.2f}'.format(len(signal[mask]) / rate), os.path.basename(file))
+            if self.verbose:
+                print('TOO SHORT:', '{:.2f}'.format(len(signal[mask]) / rate), os.path.basename(file), end="\r")
             return
 
         s = '{:.2f}'.format(ratio) + ' {:.4f}'.format(scaled_min_silence) + ' ' + file
-        print(s)
+        if self.verbose:
+            print(s, end="\r")
         if plotting:
             _plot(signal_orig, signal, mask, rate, s=s)
         _save_audio(os.path.join(out_path, file), rate, signal[mask])
@@ -217,19 +222,28 @@ class AudioCleaner:
         cleans audio files in folders
         """
         df = pd.read_csv(self.audios_dirty)
-        for index, row in df.iterrows():
+        print("CLEANING", df.shape[0], "FILES")
+        for idx, row in df.iterrows():
             file_path = row['file']
             file = os.path.basename(file_path)
             lang = row['lang']
             out_path = utils.check_path(self.path, self.audios_clean)
+
+            # saving path
             if self.one_folder:
                 file = lang + '_' + file
             else:
                 out_path = utils.check_path(self.path, self.audios_clean, lang)
+
+            # clean file
             if os.path.isfile(file_path):
                 res = self._clean_audio(file_path)
                 if not res:
                     continue
                 self._output(out_path, file, res, self.min_time, lang, self.plotting)
 
+            # output
+            if idx + 1 == df.shape[0] or (idx + 1) % 100 == 0:
+                print("FILES CLEANED:", idx + 1)
+        print()
         return utils.files_langs_to_csv(self.file_lang_list, self.path, "audios_clean_list.csv")

@@ -21,28 +21,6 @@ def _get_file_names_from_url(url):
     return files
 
 
-def _download_files(files, limit, out, value):
-    """download files from web-page"""
-
-    j = 0
-    for file in os.listdir(out):
-        if os.path.isfile(os.path.join(out, file)):
-            j += 1
-    print('FILES ALREADY EXIST', str(j))
-    if j > limit:
-        return
-    for file in files:
-        if not os.path.exists(os.path.join(out, file)):
-            j += 1
-            if j > limit:
-                break
-            print('(' + str(j) + '/' + str(len(files)) + '):', file)
-            out_file = open(os.path.join(out, file), 'wb')
-            response = request.urlopen(value + file)
-            shutil.copyfileobj(response, out_file)
-            out_file.close()
-
-
 def _to_wav(file, name, ext):
     """convert file to wav, if not wav"""
 
@@ -56,7 +34,7 @@ def _to_wav(file, name, ext):
 class AudioCrawlerVoxforge:
 
     def __init__(self, links_dict: dict, path: str, audios: str = "audios", archives="archives", limit: int = 100,
-                 seed: int = None, extraction_mode: str = 'one'):
+                 seed: int = None, extraction_mode: str = 'one', verbose: bool = False):
         """
         Initialize audio downloader
 
@@ -68,6 +46,7 @@ class AudioCrawlerVoxforge:
         :param seed: seed for random order of downloading (original order if None)
         :param extraction_mode: 'one' - (default) extract to one directory, create name-lang correspondence table,
                                 'many' - extract each files of each language to separate directory
+        :param verbose: verbose output
         """
 
         self.links_dict = links_dict
@@ -81,10 +60,32 @@ class AudioCrawlerVoxforge:
         self.out_path = utils.check_path(path, audios)
         self.extraction_mode = extraction_mode
         self.file_lang_list = []
+        self.verbose = verbose
 
     def crawl(self):
         self._voxforge_download()
         return self._extract_files()
+
+    def _download_files(self, files, limit, out, value):
+        """download files from web-page"""
+        j = 0
+        for file in os.listdir(out):
+            if os.path.isfile(os.path.join(out, file)):
+                j += 1
+        print('FILES ALREADY EXIST', str(j))
+        for file in files:
+            if not os.path.exists(os.path.join(out, file)):
+                if j == limit or j % 10 == 0:
+                    print("FILES DOWNLOADED:", j)
+                j += 1
+                if j > limit:
+                    break
+                if self.verbose:
+                    print('(' + str(j) + '/' + str(len(files)) + '):', file)
+                out_file = open(os.path.join(out, file), 'wb')
+                response = request.urlopen(value + file)
+                shutil.copyfileobj(response, out_file)
+                out_file.close()
 
     def _voxforge_download(self):
         """parse given link to find all files, matching the pattern, download files"""
@@ -99,7 +100,7 @@ class AudioCrawlerVoxforge:
 
             random.shuffle(files)  # shuffle download order
 
-            _download_files(files, self.limit, out, url)
+            self._download_files(files, self.limit, out, url)
             print()
 
     def _extract_file_many(self, path, file, lang, out_path):
@@ -148,9 +149,13 @@ class AudioCrawlerVoxforge:
         for i, file in enumerate(files):
             if os.path.isfile(os.path.join(folder, file)):
                 if self.extraction_mode is 'many':
-                    print('FILE', str(i + 1) + ':', file, 'to', out_folder)
+                    if self.verbose:
+                        print('FILE', str(i + 1) + ':', file, 'to', out_folder, end="\r")
                     self._extract_file_many(folder, file, lang, out_folder)
                 else:
-                    print('FILE', str(i + 1) + ':', file, 'to', self.out_path)
+                    if self.verbose:
+                        print('FILE', str(i + 1) + ':', file, 'to', self.out_path, end="\r")
                     self._extract_file_one(folder, file, lang)
+            if i + 1 == len(files) or (i + 1) % 10 == 0:
+                print("FILES EXTRACTED:", i + 1)
         print()

@@ -1,6 +1,5 @@
 import librosa as lr
 import matplotlib.pyplot as plt
-import scipy.io.wavfile as wav
 import numpy as np
 import random
 import pandas as pd
@@ -60,9 +59,7 @@ def _normalize(arr):
     """normalize array values, normalized values range from 0 to 1"""
     max_value = np.max(arr)
     min_value = np.min(arr)
-    for i in range(len(arr)):
-        arr[i] = (arr[i] - min_value) / (max_value - min_value)
-    return arr
+    return (arr - min_value) / (max_value - min_value)
 
 
 def _save_spectrogram(path, arr):
@@ -95,8 +92,8 @@ def _plot_spec(spec, offsets):
 class AudioSpectrumExtractor:
 
     def __init__(self, path: str, audios: str, spec: str = "audio_spec",
-                 frame_length: float = 25.0, n_mels: int = 100, n_patches: int = 10, patch_length: float = 1.0,
-                 patch_sampling_mode: str = 'random', save_full_spec: str = None):
+                 frame_length: float = 25.0, n_mels: int = 200, n_patches: int = 10, patch_length: float = 1.0,
+                 patch_sampling_mode: str = 'random', save_full_spec: str = None, verbose: bool = False):
         """
         Initialize audio spectrogram extractor
 
@@ -109,6 +106,7 @@ class AudioSpectrumExtractor:
         :param patch_length: length of patch in seconds
         :param patch_sampling_mode: patch sampling: 'random' - random, 'gauss' - normal, 'uniform' - uniformly separated
         :param save_full_spec: path to save full spectrograms, doesn't save if None
+        :param verbose: verbose output
         """
         self.path = path
         self.audios = audios
@@ -123,6 +121,7 @@ class AudioSpectrumExtractor:
         if self.save_full_spec:
             utils.check_path(self.path, self.save_full_spec)
         utils.check_path(self.path, self.spec)
+        self.verbose = verbose
 
     def _get_offsets(self, w):
         """wrapper for offsets acquisition"""
@@ -135,6 +134,19 @@ class AudioSpectrumExtractor:
         else:
             return _get_random_offsets(w, self.patch_width, self.n_patches)
 
+    def _get_spectrogram(self, file_path):
+        """
+        get scaled (from 0 to 255) spectrogram
+        https://librosa.github.io/librosa/generated/librosa.feature.melspectrogram.html
+        """
+        y, sr = lr.load(file_path, sr=None)
+        hop = int(sr / 1000 * self.frame_length)  # hop length (samples)
+        spec = lr.feature.melspectrogram(y=y, sr=sr, n_mels=self.n_mels, hop_length=hop)
+        db = lr.power_to_db(spec, ref=np.max)
+        # rescale magnitudes: 0 to 255
+        scaled = _scale_arr(_normalize(db), 255).astype(np.int16)
+        return scaled
+
     def _get_patches(self, spec):
         """get spectrogram patches"""
         h, w = spec.shape
@@ -146,39 +158,42 @@ class AudioSpectrumExtractor:
 
     def extract(self):
         """calculate spectrogram and extract patches"""
+        # read files
         df = pd.read_csv(self.audios)
-        for index, row in df.iterrows():
+        print("CONVERTING", df.shape[0], "FILES INTO SPECTROGRAMS")
+        for idx, row in df.iterrows():
             file_path = row['file']
             file = os.path.basename(file_path)
             filename, file_extension = os.path.splitext(file)
             lang = row['lang']
+            if self.verbose:
+                print(idx+1, file_path, end="\r")
 
-            plt.set_cmap('viridis')
-            sr, y = wav.read(file_path)
-            hop = int(sr / 1000 * self.frame_length)
-            y = y.astype(np.float32)
-            spec = lr.feature.melspectrogram(y, n_mels=self.n_mels, hop_length=hop)
-            img = lr.core.amplitude_to_db(spec)
-            img = np.abs(img)
-            norm = _normalize(img)
-            scaled = _scale_arr(norm, 255)
+            # get scaled (from 0 to 255) spectrogram
+            scaled = self._get_spectrogram(file_path)
 
+            # get patches from spectrogram
             patches, offsets = self._get_patches(scaled)
 
+            # save spectrogram patches
+            plt.set_cmap('binary')  # grayscale colormap
             for i, patch in enumerate(patches):
-                path = os.path.join(self.path, self.spec, lang + '_' + filename + '_' + str(i+1) + '.png')
+                path = os.path.join(self.path, self.spec, lang + '_' + filename + '_' + str(i + 1) + '.png')
                 _save_spectrogram(path, patch)
 
+            # save full spectrogram
             if self.save_full_spec:
                 path = os.path.join(self.path, self.save_full_spec, lang + '_' + filename + '.png')
                 _save_spectrogram(path, scaled)
 
+            # output
+            if idx + 1 == df.shape[0] or (idx + 1) % 100 == 0:
+                print("FILES CONVERTED:", idx + 1)
 
-            # TODO grayscale saving
             # TODO saving to h5
             # TODO write to console when saving
 
             # _plot_patches(patches)
             # _plot_spec(scaled, offsets)
 
-            # plt.imsave(r"D:/test.png", scaled, origin="lower")
+        print()
