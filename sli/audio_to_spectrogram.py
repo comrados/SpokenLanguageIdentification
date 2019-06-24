@@ -62,17 +62,19 @@ def _normalize(arr):
     return (arr - min_value) / (max_value - min_value)
 
 
-def _save_spectrogram(path, arr):
+def _save_spectrogram_img(path, arr):
     """save spectrogram as image"""
     plt.imsave(path, arr, origin="lower")
 
 
-def _plot_patches(patches):
+def _plot_patches(patches, sampling):
     """plot patches"""
     for i in range(1, len(patches) + 1):
         plt.subplot(1, len(patches), i)
         plt.axis('off')
+        plt.title(str(i+1))
         plt.imshow(patches[i - 1], origin="lower")
+    plt.suptitle(str(len(patches)) + ' spectrogram patches, ' + sampling + ' sampling')
     plt.show()
 
 
@@ -80,20 +82,23 @@ def _plot_spec(spec, offsets):
     """plot spectrogram"""
     new = np.copy(spec)
     new[:, offsets] = 255
-    plt.subplot(2, 1, 1)
+    plt.subplot(1, 2, 1)
     plt.imshow(new, origin="lower")
     plt.axis('off')
-    plt.subplot(2, 1, 2)
+    plt.title('With offsets')
+    plt.subplot(1, 2, 2)
     plt.axis('off')
     plt.imshow(spec, origin="lower")
+    plt.title('Pure')
+    plt.suptitle('Full spectrogram')
     plt.show()
 
 
 class AudioSpectrumExtractor:
 
-    def __init__(self, path: str, audios: str, spec: str = "audio_spec",
-                 frame_length: float = 25.0, n_mels: int = 200, n_patches: int = 10, patch_length: float = 1.0,
-                 patch_sampling_mode: str = 'random', save_full_spec: str = None, verbose: bool = False):
+    def __init__(self, path: str, audios: str, spec: str = "audios_spec", frame_length: float = 25.0, n_mels: int = 200,
+                 n_patches: int = 10, patch_length: float = 1.0, patch_sampling_mode: str = 'random',
+                 save_full_spec: str = None, plotting: bool = False, verbose: bool = False):
         """
         Initialize audio spectrogram extractor
 
@@ -106,6 +111,7 @@ class AudioSpectrumExtractor:
         :param patch_length: length of patch in seconds
         :param patch_sampling_mode: patch sampling: 'random' - random, 'gauss' - normal, 'uniform' - uniformly separated
         :param save_full_spec: path to save full spectrograms, doesn't save if None
+        :param plotting: plot spectrogram and patches
         :param verbose: verbose output
         """
         self.path = path
@@ -121,7 +127,10 @@ class AudioSpectrumExtractor:
         if self.save_full_spec:
             utils.check_path(self.path, self.save_full_spec)
         utils.check_path(self.path, self.spec)
+        self.plotting = plotting
         self.verbose = verbose
+        self.spec_lang_list = []
+        self.spec_full_lang_list = []
 
     def _get_offsets(self, w):
         """wrapper for offsets acquisition"""
@@ -156,6 +165,24 @@ class AudioSpectrumExtractor:
             patches.append(spec[:, offsets[i]:offsets[i + 1]])
         return patches, offsets
 
+    def _save_spec(self, patch, filename, lang, num=None):
+        """get name of spectrogram image and save it"""
+        if filename.startswith(lang + '_'):
+            new_name = filename
+        else:
+            new_name = lang + '_' + filename
+        spec_folder = self.save_full_spec
+        if num:
+            new_name += '_' + str(num)
+            spec_folder = self.spec
+        new_name += '.png'
+        path = os.path.join(self.path, spec_folder, new_name)
+        _save_spectrogram_img(path, patch)
+        if num:
+            self.spec_lang_list.append({'file': path, 'lang': lang})
+        else:
+            self.spec_full_lang_list.append({'file': path, 'lang': lang})
+
     def extract(self):
         """calculate spectrogram and extract patches"""
         # read files
@@ -178,22 +205,24 @@ class AudioSpectrumExtractor:
             # save spectrogram patches
             plt.set_cmap('binary')  # grayscale colormap
             for i, patch in enumerate(patches):
-                path = os.path.join(self.path, self.spec, lang + '_' + filename + '_' + str(i + 1) + '.png')
-                _save_spectrogram(path, patch)
+                self._save_spec(patch, filename, lang, num=i+1)
 
             # save full spectrogram
             if self.save_full_spec:
-                path = os.path.join(self.path, self.save_full_spec, lang + '_' + filename + '.png')
-                _save_spectrogram(path, scaled)
+                self._save_spec(scaled, filename, lang)
 
             # output
             if idx + 1 == df.shape[0] or (idx + 1) % 100 == 0:
                 print("FILES CONVERTED:", idx + 1)
 
-            # TODO saving to h5
-            # TODO write to console when saving
-
-            # _plot_patches(patches)
-            # _plot_spec(scaled, offsets)
+            # plotting
+            if self.plotting:
+                _plot_patches(patches, self.patch_sampling_mode)
+                _plot_spec(scaled, offsets)
 
         print()
+        spec_csv = utils.files_langs_to_csv(self.spec_lang_list, self.path, "audios_spec.csv")
+        spec_full_csv = utils.files_langs_to_csv(self.spec_full_lang_list, self.path, "audios_spec_full.csv")
+        return spec_csv, spec_full_csv
+
+        # TODO saving to h5

@@ -6,7 +6,6 @@ import pandas as pd
 from scipy.fftpack import fft, ifft, fftfreq
 from scipy.signal import butter, filtfilt
 from . import utils
-
 import matplotlib.pyplot as plt
 import time
 

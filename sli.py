@@ -9,7 +9,7 @@ archives = "archives"
 
 crawler = sli.AudioCrawlerVoxforge(links, path, audios, archives, limit=7, extraction_mode='many')
 dirty = crawler.crawl()
-
+print(dirty)
 
 audios_clean = "audios_clean"
 one_folder = True
@@ -28,8 +28,9 @@ plotting = False
 cleaner = sli.AudioCleaner(path, dirty, audios_clean, one_folder, min_silence, len_part, min_time, f, low, hi,
                            amp_mag, drc, drc_param, plotting)
 clean = cleaner.clean()
+print(clean)
 
+spectre = sli.AudioSpectrumExtractor(path, clean, "audios_spec", save_full_spec="audios_spec_full")
 
-spectre = sli.AudioSpectrumExtractor(path, clean, "audio_spec", save_full_spec="audio_spec_full")
-
-spectre.extract()
+patches, specs = spectre.extract()
+print(patches, specs)

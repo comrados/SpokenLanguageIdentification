@@ -126,7 +126,6 @@ class AudioCrawlerVoxforge:
 
     def _extract_files(self):
         """extract files from archives in given directory"""
-
         folders = []
         for folder in os.listdir(self.out_path):
             lang = folder

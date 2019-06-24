@@ -13,6 +13,9 @@ def check_path(*elements):
 
 
 def files_langs_to_csv(files_list, path, csv_name):
-    df = pd.DataFrame.from_dict(files_list)
-    df.to_csv(os.path.join(path, csv_name), index=False)
-    return os.path.join(path, csv_name)
+    if len(files_list) > 0:
+        df = pd.DataFrame.from_dict(files_list)
+        df.to_csv(os.path.join(path, csv_name), index=False)
+        return os.path.join(path, csv_name)
+    else:
+        return None
