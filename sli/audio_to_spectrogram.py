@@ -4,6 +4,7 @@ import numpy as np
 import random
 import pandas as pd
 import os
+from PIL import Image, ImageOps
 
 from . import utils
 
@@ -62,11 +63,6 @@ def _normalize(arr):
     return (arr - min_value) / (max_value - min_value)
 
 
-def _save_spectrogram_img(path, arr):
-    """save spectrogram as image"""
-    plt.imsave(path, arr, origin="lower")
-
-
 def _plot_patches(patches, sampling):
     """plot patches"""
     for i in range(1, len(patches) + 1):
@@ -98,7 +94,7 @@ class AudioSpectrumExtractor:
 
     def __init__(self, path: str, audios: str, spec: str = "audios_spec", frame_length: float = 25.0, n_mels: int = 200,
                  n_patches: int = 10, patch_length: float = 1.0, patch_sampling_mode: str = 'random',
-                 save_full_spec: str = None, plotting: bool = False, verbose: bool = False):
+                 save_full_spec: str = None, spec_bg='white', plotting: bool = False, verbose: bool = False):
         """
         Initialize audio spectrogram extractor
 
@@ -111,6 +107,7 @@ class AudioSpectrumExtractor:
         :param patch_length: length of patch in seconds
         :param patch_sampling_mode: patch sampling: 'random' - random, 'gauss' - normal, 'uniform' - uniformly separated
         :param save_full_spec: path to save full spectrograms, doesn't save if None
+        :param spec_bg: spectrogram background color ('white or black')
         :param plotting: plot spectrogram and patches
         :param verbose: verbose output
         """
@@ -127,6 +124,7 @@ class AudioSpectrumExtractor:
         if self.save_full_spec:
             utils.check_path(self.path, self.save_full_spec)
         utils.check_path(self.path, self.spec)
+        self.spec_bg = spec_bg
         self.plotting = plotting
         self.verbose = verbose
         self.spec_lang_list = []
@@ -153,7 +151,7 @@ class AudioSpectrumExtractor:
         spec = lr.feature.melspectrogram(y=y, sr=sr, n_mels=self.n_mels, hop_length=hop)
         db = lr.power_to_db(spec, ref=np.max)
         # rescale magnitudes: 0 to 255
-        scaled = _scale_arr(_normalize(db), 255).astype(np.int16)
+        scaled = _scale_arr(_normalize(db), 255).astype(np.uint8)
         return scaled
 
     def _get_patches(self, spec):
@@ -164,6 +162,13 @@ class AudioSpectrumExtractor:
         for i in range(0, len(offsets), 2):
             patches.append(spec[:, offsets[i]:offsets[i + 1]])
         return patches, offsets
+
+    def _save_spectrogram_img(self, path, arr):
+        """save spectrogram as image"""
+        img = ImageOps.flip(Image.fromarray(arr, mode='L'))
+        if self.spec_bg == 'white':
+            img = ImageOps.invert(img)
+        img.save(path)
 
     def _save_spec(self, patch, filename, lang, num=None):
         """get name of spectrogram image and save it"""
@@ -177,7 +182,7 @@ class AudioSpectrumExtractor:
             spec_folder = self.spec
         new_name += '.png'
         path = os.path.join(self.path, spec_folder, new_name)
-        _save_spectrogram_img(path, patch)
+        self._save_spectrogram_img(path, patch)
         if num:
             self.spec_lang_list.append({'file': path, 'lang': lang})
         else:

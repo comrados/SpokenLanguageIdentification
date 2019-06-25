@@ -9,8 +9,7 @@ import random
 def normalize(arr):
     max_value = np.max(arr)
     min_value = np.min(arr)
-    for i in range(len(arr)):
-        arr[i] = (arr[i] - min_value) / (max_value - min_value)
+    arr = (arr - min_value) / (max_value - min_value)
     return arr
 
 def scale(arr, k):
@@ -77,24 +76,32 @@ def plot_patches(patches):
         plt.imshow(patches[i-1], origin="lower")
     plt.show()
     
+def plot_patches2(patches):    
+    for i in range(1, len(patches)+1):
+        plt.subplot(1, len(patches), i)
+        plt.axis('off')
+        plt.imshow(patches[i-1])
+    plt.show()
+    
 def plot_spec(spec, offsets):
     new = np.copy(spec)
     for i in range(0, len(offsets), 2):
         color = random.randint(200, 256)       
         new[:,offsets[i]] = color
         new[:,offsets[i+1]] = color
-    plt.subplot(2, 1, 1)
+    plt.subplot(1, 2, 1)
     plt.imshow(new, origin="lower")
     plt.axis('off')
-    plt.subplot(2, 1, 2)
+    plt.title('with offsets')
+    plt.subplot(1, 2, 2)
     plt.axis('off')
     plt.imshow(spec, origin="lower")
+    plt.title('pure')
     plt.show()
 
-audio_paths = [r"D:/speechrecogn/voxforge/audios_clean\de_Black_Galaxy-20080530-xzb-de11-101.wav",
-               r"D:/speechrecogn/voxforge/audios_clean\ru_kn0pka-20110505-hic-ru_0034.wav"]
+audio_paths = [r"D:/speechrecogn/voxforge/audios_clean\de_Black_Galaxy-20080530-xzb-de11-101.wav"]
 
-n_mels=100
+n_fft=200
 time = 25
 n = 10
 
@@ -103,13 +110,20 @@ patch_width = int(nn_frame_width*1000/time)
 
 
 for audio_path in audio_paths:
-    plt.set_cmap('viridis')
+    plt.set_cmap('binary')
     
     sr, y = wav.read(audio_path)
     y, sr = lr.load(audio_path, sr=None)
     hop = int(sr/1000*time)
     
     y = y.astype(np.float32)
+    
+    #y = np.abs(y)
+    
+    s, f = lr.spectrum._spectrogram(y, n_fft=n_fft, hop_length=hop)
+    norm2 = normalize(s)
+    scaled2 = scale(norm2, 255)
+    plot_patches([scaled2])
     
     spec = lr.feature.melspectrogram(y, n_mels=n_mels, hop_length=hop)
     img = lr.core.amplitude_to_db(spec)
@@ -126,7 +140,48 @@ for audio_path in audio_paths:
     
     plt.imsave(r"D:/test.png", scaled, origin="lower")
 
-val = np.minimum(np.maximum(0, np.random.normal((w-l-1)/2, (w-l-1)/2/2)), w-l-1)
+
+from PIL import Image
 
 
-np.random.normal(0, 1)
+im = Image.open(r"D:\speechrecogn\voxforge\audio_spec_full\de_de_ralfherzog-20080215-de120-de120-86.png")
+
+
+import librosa
+import librosa.display
+import pandas as pd
+import os
+
+y, sr = lr.load(audio_path, sr=None)
+
+S = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=200)
+db = librosa.power_to_db(S, ref=np.max)  
+db = scale(normalize(db), 255).astype(np.int16) 
+
+print(np.min(db), np.max(db))
+
+plt.set_cmap('binary')
+plot_patches([db])
+
+plt.figure(figsize=(10, 4))
+librosa.display.specshow(db, y_axis='mel', x_axis='time')
+plt.colorbar(format='%+2.0f dB')
+plt.title('Mel spectrogram')
+plt.tight_layout()
+
+
+
+df = pd.read_csv(r"D:\speechrecogn\voxforge\audios_clean_list.csv")
+for index, row in df.iterrows():
+    file_path = row['file']
+    file = os.path.basename(file_path)
+    filename, file_extension = os.path.splitext(file)
+    lang = row['lang']
+    
+    y, sr = lr.load(file_path, sr=None)
+    S = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=200)
+    db = librosa.power_to_db(S, ref=np.max)  
+    
+    db = scale(normalize(db), 255).astype(np.int16)     
+    
+    print(np.min(db), np.max(db))

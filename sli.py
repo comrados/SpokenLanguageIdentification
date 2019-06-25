@@ -34,3 +34,6 @@ spectre = sli.AudioSpectrumExtractor(path, clean, "audios_spec", save_full_spec=
 
 patches, specs = spectre.extract()
 print(patches, specs)
+
+converter = sli.AudioToH5Converter(path, patches, verbose=True)
+converter.convert()
