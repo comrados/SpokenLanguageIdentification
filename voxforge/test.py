@@ -218,8 +218,74 @@ np.mean(dbs)
 
 ###############################################################################
 
-def asd(l, p, *args):
-    print(*args)
-    print(os.path.join(*args))
+import numpy as np
+import pandas as pd
+import os
+import dask.array.image as dai
+import dask.array as da
+import h5py
+import dask.base as db
 
-asd(1, 2, 'asd', '123', 'ss')
+arr = dai.imread(r"D:\speechrecogn\voxforge\audios_spec\*.png", preprocess=np.transpose)
+arr = dai.imread(r"D:\speechrecogn\voxforge\audios_spec\*.png")
+
+
+
+
+
+
+from glob import glob
+import os
+from skimage.io import imread as sk_imread
+from dask.array import Array
+from dask.base import tokenize
+import pandas as pd
+import numpy as np
+
+
+def imread(filenames, imread=None, preprocess=None):
+    """
+    modified dask imread method, accepts list of file names instead of glob string
+    """
+    def add_leading_dimension(x):
+        return x[None, ...]
+    
+    imread = imread or sk_imread
+    name = 'imread-%s' % tokenize(filenames, map(os.path.getmtime, filenames))
+
+    sample = imread(filenames[0])
+    if preprocess:
+        sample = preprocess(sample)
+
+    keys = [(name, i) + (0,) * len(sample.shape) for i in range(len(filenames))]
+    if preprocess:
+        values = [(add_leading_dimension, (preprocess, (imread, fn)))
+                  for fn in filenames]
+    else:
+        values = [(add_leading_dimension, (imread, fn))
+                  for fn in filenames]
+    dsk = dict(zip(keys, values))
+
+    chunks = ((1, ) * len(filenames), ) + tuple((d, ) for d in sample.shape)
+
+    return Array(dsk, name, chunks, sample.dtype)
+
+
+df = pd.read_csv(r"D:\speechrecogn\voxforge\audios_spec.csv")
+for idx, row in df.iterrows():
+    file_path = row['file']
+    file = os.path.basename(file_path)
+    filename, file_extension = os.path.splitext(file)
+    lang = row['lang']
+    
+fl = df['file'].values.tolist()
+
+arr2 = imread(fl,preprocess=np.transpose)
+
+print(imread(fl,preprocess=np.transpose))
+print(imread(fl))
+
+def a(*a):
+    print(a, len(a))
+    
+a(1, 1, 2)

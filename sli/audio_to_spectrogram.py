@@ -63,6 +63,12 @@ def _normalize(arr):
     return (arr - min_value) / (max_value - min_value)
 
 
+def _get_min_unique_count(df):
+    """counts files of distinct languages, returns min"""
+    return df.groupby('lang')['file'].nunique().min()
+
+
+
 def _plot_patches(patches, sampling):
     """plot patches"""
     for i in range(1, len(patches) + 1):
@@ -92,20 +98,23 @@ def _plot_spec(spec, offsets):
 
 class AudioSpectrumExtractor:
 
-    def __init__(self, path: str, audios: str, spec: str = "audios_spec", frame_length: float = 25.0, n_mels: int = 200,
-                 n_patches: int = 10, patch_length: float = 1.0, patch_sampling_mode: str = 'random',
-                 save_full_spec: str = None, spec_bg='white', plotting: bool = False, verbose: bool = False):
+    def __init__(self, path: str, audios: str, spec: str = "audios_spec", balanced: bool = True, n_patches: int = 10,
+                 seed: int = None, frame_length: float = 25.0, n_mels: int = 200, patch_length: float = 1.0,
+                 patch_sampling: str = 'random', save_full_spec: str = None, spec_bg='white', plotting: bool = False,
+                 verbose: bool = False):
         """
         Initialize audio spectrogram extractor
 
         :param path: working path
         :param audios: path to file-lang correspondence csv-file
         :param spec: spectrograms folder name
+        :param balanced: balance number of spectrograms per language
+        :param n_patches: number of patches extracted from each spectrogram
+        :param seed: seed for files' order shuffling, default - None, if None - random
         :param frame_length: spectrogram frame length in milliseconds
         :param n_mels: quantity of spectrogram mels (spectrogram height)
-        :param n_patches: number of patches extracted from each spectrogram
         :param patch_length: length of patch in seconds
-        :param patch_sampling_mode: patch sampling: 'random' - random, 'gauss' - normal, 'uniform' - uniformly separated
+        :param patch_sampling: patch sampling: 'random' - random, 'gauss' - normal, 'uniform' - uniformly separated
         :param save_full_spec: path to save full spectrograms, doesn't save if None
         :param spec_bg: spectrogram background color ('white or black')
         :param plotting: plot spectrogram and patches
@@ -114,12 +123,14 @@ class AudioSpectrumExtractor:
         self.path = path
         self.audios = audios
         self.spec = spec
+        self.balanced = balanced
+        self.n_patches = n_patches
         self.frame_length = frame_length
         self.n_mels = n_mels
-        self.n_patches = n_patches
         self.patch_length = patch_length
         self.patch_width = int(patch_length * 1000 / self.frame_length)
-        self.patch_sampling_mode = patch_sampling_mode
+        self.patch_sampling = patch_sampling
+        self.seed = seed
         self.save_full_spec = save_full_spec
         if self.save_full_spec:
             utils.check_path(self.path, self.save_full_spec)
@@ -132,11 +143,11 @@ class AudioSpectrumExtractor:
 
     def _get_offsets(self, w):
         """wrapper for offsets acquisition"""
-        if self.patch_sampling_mode is 'random':
+        if self.patch_sampling is 'random':
             return _get_random_offsets(w, self.patch_width, self.n_patches)
-        elif self.patch_sampling_mode is 'uniform':
+        elif self.patch_sampling is 'uniform':
             return _get_uniform_offsets(w, self.patch_width, self.n_patches)
-        elif self.patch_sampling_mode is 'gauss':
+        elif self.patch_sampling is 'gauss':
             return _get_gauss_offsets(w, self.patch_width, self.n_patches)
         else:
             return _get_random_offsets(w, self.patch_width, self.n_patches)
@@ -188,11 +199,19 @@ class AudioSpectrumExtractor:
         else:
             self.spec_full_lang_list.append({'file': path, 'lang': lang})
 
+    def _read_and_shuffle_df(self):
+        df = pd.read_csv(self.audios)  # read
+        return df.sample(frac=1, random_state=self.seed).reset_index(drop=True)  # shuffle
+
     def extract(self):
         """calculate spectrogram and extract patches"""
         # read files
-        df = pd.read_csv(self.audios)
-        print("CONVERTING", df.shape[0], "FILES INTO SPECTROGRAMS")
+        df = self._read_and_shuffle_df()
+        threshold = _get_min_unique_count(df)  # number of files drawn for each language (for dataset balance)
+        counts = {u: 0 for u in df['lang'].unique()}  # dict for saving counts of processed files
+        print("CONVERTING UP TO", df.shape[0], "FILES INTO SPECTROGRAMS")
+        print("LANGUAGES:", len(counts))
+        print("MIN FILES' COUNT OF LANGUAGE", threshold)
         for idx, row in df.iterrows():
             file_path = row['file']
             file = os.path.basename(file_path)
@@ -200,6 +219,10 @@ class AudioSpectrumExtractor:
             lang = row['lang']
             if self.verbose:
                 print(idx+1, file_path, end="\r")
+
+            # checking counts and threshold (for balanced dataset)
+            if counts[lang] >= threshold and self.balanced:
+                continue
 
             # get scaled (from 0 to 255) spectrogram
             scaled = self._get_spectrogram(file_path)
@@ -218,13 +241,18 @@ class AudioSpectrumExtractor:
 
             # output
             if idx + 1 == df.shape[0] or (idx + 1) % 100 == 0:
-                print("FILES CONVERTED:", idx + 1)
+                print("FILES PROCESSED:", idx + 1)
 
             # plotting
             if self.plotting:
-                _plot_patches(patches, self.patch_sampling_mode)
+                _plot_patches(patches, self.patch_sampling)
                 _plot_spec(scaled, offsets)
 
+            # increasing counter
+            counts[lang] += 1
+
+        print("FILES CONVERTED TOTAL:", sum(counts.values()))
+        print("FILES CONVERTED FOR EACH LANGUAGE:", counts)
         print()
         spec_csv = utils.files_langs_to_csv(self.spec_lang_list, self.path, "audios_spec.csv")
         spec_full_csv = utils.files_langs_to_csv(self.spec_full_lang_list, self.path, "audios_spec_full.csv")

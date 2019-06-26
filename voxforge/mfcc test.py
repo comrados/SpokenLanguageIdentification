@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import scipy.io.wavfile as wav
 import numpy as np
 import random
+from PIL import Image
+from PIL import ImageOps
 
 
 def normalize(arr):
@@ -101,7 +103,7 @@ def plot_spec(spec, offsets):
 
 audio_paths = [r"D:/speechrecogn/voxforge/audios_clean\de_Black_Galaxy-20080530-xzb-de11-101.wav"]
 
-n_fft=200
+n_mels=200
 time = 25
 n = 10
 
@@ -113,35 +115,30 @@ for audio_path in audio_paths:
     plt.set_cmap('binary')
     
     sr, y = wav.read(audio_path)
+    
+    
     y, sr = lr.load(audio_path, sr=None)
-    hop = int(sr/1000*time)
-    
-    y = y.astype(np.float32)
-    
-    #y = np.abs(y)
-    
-    s, f = lr.spectrum._spectrogram(y, n_fft=n_fft, hop_length=hop)
-    norm2 = normalize(s)
-    scaled2 = scale(norm2, 255)
-    plot_patches([scaled2])
-    
-    spec = lr.feature.melspectrogram(y, n_mels=n_mels, hop_length=hop)
-    img = lr.core.amplitude_to_db(spec)
-    
-    img = np.abs(img)
-    
-    norm = normalize(img)
-    scaled = scale(norm, 255)
+    hop = int(sr/1000*time) # hop length (samples)
+    spec = lr.feature.melspectrogram(y=y, sr=sr, n_mels=n_mels, hop_length=hop)
+    db = lr.power_to_db(spec, ref=np.max)
+    # rescale magnitudes: 0 to 255
+    scaled = scale(normalize(db), 255).astype(np.uint8)
     
     patches, offsets = get_patches(scaled, n, patch_width, mode='random')
     plot_patches(patches)   
     
     plot_spec(scaled, offsets)
     
+    im = Image.fromarray(scaled, mode='L')
+    
+    im = ImageOps.flip(im)
+    
+    im.show()
+    
     plt.imsave(r"D:/test.png", scaled, origin="lower")
 
 
-from PIL import Image
+
 
 
 im = Image.open(r"D:\speechrecogn\voxforge\audio_spec_full\de_de_ralfherzog-20080215-de120-de120-86.png")
