@@ -101,9 +101,9 @@ def _drc_hard_knee(dbs, threshold, scale=2, direction='up'):
 class AudioCleaner:
 
     def __init__(self, path: str, audios_dirty: str, audios_clean: str = "audios_clean", one_folder: bool = False,
-                 min_silence: float = 0.01, len_part: float = 0.25, min_time: float = 2.5, f: str = 'butter',
-                 low: float = 100., hi: float = 7000., amp_mag: bool = True, drc: bool = False, drc_param: list = None,
-                 plotting: bool = False, verbose: bool = False):
+                 min_silence: float = 0.01, len_part: float = 0.25, min_time: float = 2.5, f: dict = None,
+                 amp_mag: bool = True, drc: bool = False, drc_param: list = None, plotting: bool = False,
+                 verbose: bool = False):
         """
         Initialize audio cleaner
 
@@ -113,9 +113,7 @@ class AudioCleaner:
         :param one_folder: output to one or multiple (the resulting number of folders equals to number of languages)
         :param min_silence: minimum silence level (0.0 to 1.0)
         :param len_part: length in seconds of moving window for signal enveloping
-        :param f: bandpass filter type ('butter' - butterworth, 'fft' - via fourier transform)
-        :param low: frequency of filter's lowcut
-        :param hi: frequency of filter's highcut
+        :param f: bandpass filter, dict attr: 'type' - ('butter' or 'fft'), 'low' - lowcut, 'high' highcut
         :param min_time: minimal length of processed audio to save
         :param amp_mag: amplitude magnification (multiplies audio signal amplitude to increase volume)
         :param drc: toggle dynamic range compression (DRC)
@@ -131,8 +129,6 @@ class AudioCleaner:
         self.len_part = len_part
         self.min_time = min_time
         self.f = f
-        self.low = low
-        self.hi = hi
         self.amp_mag = amp_mag
         self.drc = drc
         self.drc_param = drc_param
@@ -148,10 +144,12 @@ class AudioCleaner:
 
     def _apply_filter(self, signal, rate, min_silence):
         """applies filter"""
-        if self.f == 'fft':
-            signal = _fft_filter(signal, rate, self.low, self.hi)
-        if self.f == 'butter':
-            signal = _butter_bandpass_filter(signal, rate, self.low, self.hi)
+        if self.f['type'] == 'fft':
+            signal = _fft_filter(signal, rate, self.f['low'], self.f['high'])
+        elif self.f['type'] == 'butter':
+            signal = _butter_bandpass_filter(signal, rate, self.f['low'], self.f['high'])
+        else:
+            pass
         mask = self._envelope(signal, rate, min_silence)
         return signal, mask
 

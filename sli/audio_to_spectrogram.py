@@ -68,13 +68,12 @@ def _get_min_unique_count(df):
     return df.groupby('lang')['file'].nunique().min()
 
 
-
 def _plot_patches(patches, sampling):
     """plot patches"""
     for i in range(1, len(patches) + 1):
         plt.subplot(1, len(patches), i)
         plt.axis('off')
-        plt.title(str(i+1))
+        plt.title(str(i + 1))
         plt.imshow(patches[i - 1], origin="lower")
     plt.suptitle(str(len(patches)) + ' spectrogram patches, ' + sampling + ' sampling')
     plt.show()
@@ -99,7 +98,7 @@ def _plot_spec(spec, offsets):
 class AudioSpectrumExtractor:
 
     def __init__(self, path: str, audios: str, spec: str = "audios_spec", balanced: bool = True, n_patches: int = 10,
-                 seed: int = None, frame_length: float = 25.0, n_mels: int = 200, patch_length: float = 1.0,
+                 seed: int = None, frame_length: float = 25.0, n_mels: int = 100, patch_length: float = 1.0,
                  patch_sampling: str = 'random', save_full_spec: str = None, spec_bg='white', plotting: bool = False,
                  verbose: bool = False):
         """
@@ -218,7 +217,7 @@ class AudioSpectrumExtractor:
             filename, file_extension = os.path.splitext(file)
             lang = row['lang']
             if self.verbose:
-                print(idx+1, file_path, end="\r")
+                print(idx + 1, file_path, end="\r")
 
             # checking counts and threshold (for balanced dataset)
             if counts[lang] >= threshold and self.balanced:
@@ -233,7 +232,7 @@ class AudioSpectrumExtractor:
             # save spectrogram patches
             plt.set_cmap('binary')  # grayscale colormap
             for i, patch in enumerate(patches):
-                self._save_spec(patch, filename, lang, num=i+1)
+                self._save_spec(patch, filename, lang, num=i + 1)
 
             # save full spectrogram
             if self.save_full_spec:
@@ -257,5 +256,3 @@ class AudioSpectrumExtractor:
         spec_csv = utils.files_langs_to_csv(self.spec_lang_list, self.path, "audios_spec.csv")
         spec_full_csv = utils.files_langs_to_csv(self.spec_full_lang_list, self.path, "audios_spec_full.csv")
         return spec_csv, spec_full_csv
-
-        # TODO saving to h5

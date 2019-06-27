@@ -5,6 +5,8 @@ import dask.array as da
 import h5py
 from skimage.io import imread as sk_imread
 from dask.base import tokenize
+import matplotlib.pyplot as plt
+import random
 
 
 def _imread(filenames, imread=None, preprocess=None):
@@ -36,15 +38,51 @@ def _imread(filenames, imread=None, preprocess=None):
     return da.Array(dsk, name, chunks, sample.dtype)
 
 
+def _plot(files):
+    """
+    plot random samples
+    """
+    # read data
+    x_tr = da.from_array(h5py.File(files[0])['x_tr'], chunks=1000)
+    y_tr = da.from_array(h5py.File(files[1])['y_tr'], chunks=1000)
+    x_va = da.from_array(h5py.File(files[2])['x_va'], chunks=1000)
+    y_va = da.from_array(h5py.File(files[3])['y_va'], chunks=1000)
+    print("TRAINING SAMPLES:", x_tr.shape, "TRAINING LABELS:", y_tr.shape)
+    print("VALIDATION SAMPLES:", x_va.shape, "VALIDATION LABELS:", y_va.shape)
+    x_tr /= 255.
+    x_va /= 255.
+    _plot_samples(x_va, y_va, 'Validation', shape=(2, 2))
+    _plot_samples(x_tr, y_tr, 'Training', shape=(2, 2))
+
+
+def _plot_samples(data, labels, title, shape=(2, 2)):
+    """plots random samples from h5 files"""
+    h = shape[0]
+    w = shape[1]
+    n = h * w
+    rands = [random.randint(0, len(data)) for _ in range(n)]
+    plt.set_cmap('gray')
+    plt.suptitle(title)
+    for i in range(1, n + 1):
+        label = np.array(labels[rands[i - 1]])
+        plt.subplot(h, w, i)
+        plt.title("Sample " + str(rands[i - 1]) + " " + str(label))
+        plt.axis('off')
+        plt.imshow(data[rands[i - 1], :, :, 0], )
+    plt.show()
+
+
 class AudioToH5Converter:
 
-    def __init__(self, path: str, audios: str, val_part: float = 0.25, transpose: bool = True, verbose: bool = False):
+    def __init__(self, path: str, audios: str, val_part: float = 0.25, transpose: bool = False, plotting: bool = False,
+                 verbose: bool = False):
         """
         Initialize audio to h5 converter
         :param path: working path
         :param audios: path to file-lang correspondence csv-file
         :param val_part: validation set part
-        :param transpose transpose picture or not
+        :param transpose: transpose picture or not
+        :param plotting: toggle random samples plotting
         :param verbose: verbose output
         """
         self.path = path
@@ -52,12 +90,17 @@ class AudioToH5Converter:
         self.verbose = verbose
         self.val_part = val_part
         self.transpose = transpose
+        self.out_files = []
+        self.plotting = plotting
 
     def convert(self):
         self._get_h5_datasets()
+        if self.plotting:
+            _plot(self.out_files)
+        return self.out_files
 
     def _del_previous_data(self, *name):
-        """removes old data files"""
+        """removes data files"""
         if len(name) == 0:
             name = ["temp.h5", "x_tr.h5", "y_tr.h5", "x_va.h5", "y_va.h5"]
         try:
@@ -89,14 +132,14 @@ class AudioToH5Converter:
         # labels
         y = df['lang']
         y = pd.get_dummies(y)
-        y = y.reindex_axis(sorted(y.columns), axis=1).values
-        y = da.from_array(y, chunks=1000)
+        y = y.reindex(sorted(y.columns), axis=1).values  # sort colums, get ndarray from DataFrame
+        y = da.from_array(y, chunks='auto')
 
         # data
         temp_out_data = os.path.join(self.path, "temp.h5")
         count = self._pics_to_h5(fl, temp_out_data, "temp")
         x = h5py.File(temp_out_data)["temp"]
-        x = da.from_array(x, chunks=1000)
+        x = da.from_array(x, chunks='auto')
 
         # calculate test/validation sizes
         va_size = int(self.val_part * count)
@@ -123,3 +166,5 @@ class AudioToH5Converter:
         del x
         self._del_previous_data("temp.h5")
         print()
+
+        self.out_files = [os.path.join(self.path, f) for f in ["x_tr.h5", "y_tr.h5", "x_va.h5", "y_va.h5"]]
