@@ -210,7 +210,7 @@ class AudioSpectrumExtractor:
         counts = {u: 0 for u in df['lang'].unique()}  # dict for saving counts of processed files
         print("CONVERTING UP TO", df.shape[0], "FILES INTO SPECTROGRAMS")
         print("LANGUAGES:", len(counts))
-        print("MIN FILES' COUNT OF LANGUAGE", threshold)
+        print("MIN FILES' COUNT PER LANGUAGE", threshold)
         for idx, row in df.iterrows():
             file_path = row['file']
             file = os.path.basename(file_path)

@@ -43,8 +43,8 @@ def _plot(files):
     plot random samples
     """
     # read data
-    x_tr = da.from_array(h5py.File(files[0])['x_tr'], chunks=1000)
-    y_tr = da.from_array(h5py.File(files[1])['y_tr'], chunks=1000)
+    x_tr = da.from_array(h5py.File(files[0])['x'], chunks=1000)
+    y_tr = da.from_array(h5py.File(files[1])['y'], chunks=1000)
     x_va = da.from_array(h5py.File(files[2])['x_va'], chunks=1000)
     y_va = da.from_array(h5py.File(files[3])['y_va'], chunks=1000)
     print("TRAINING SAMPLES:", x_tr.shape, "TRAINING LABELS:", y_tr.shape)
@@ -90,7 +90,7 @@ class AudioToH5Converter:
         self.verbose = verbose
         self.val_part = val_part
         self.transpose = transpose
-        self.out_files = []
+        self.out_files = {}
         self.plotting = plotting
 
     def convert(self):
@@ -102,7 +102,7 @@ class AudioToH5Converter:
     def _del_previous_data(self, *name):
         """removes data files"""
         if len(name) == 0:
-            name = ["temp.h5", "x_tr.h5", "y_tr.h5", "x_va.h5", "y_va.h5"]
+            name = ["temp.h5", "x.h5", "y.h5", "x_va.h5", "y_va.h5"]
         try:
             for n in name:
                 full = os.path.join(self.path, n)
@@ -153,8 +153,8 @@ class AudioToH5Converter:
         print("VALIDATION SET SIZE", va_size)
         print("TRAINING SET SIZE", tr_size)
 
-        x[tr_idx].to_hdf5(os.path.join(self.path, "x_tr.h5"), 'x_tr')
-        y[tr_idx].to_hdf5(os.path.join(self.path, "y_tr.h5"), 'y_tr')
+        x[tr_idx].to_hdf5(os.path.join(self.path, "x.h5"), 'x')
+        y[tr_idx].to_hdf5(os.path.join(self.path, "y.h5"), 'y')
         x[va_idx].to_hdf5(os.path.join(self.path, "x_va.h5"), 'x_va')
         y[va_idx].to_hdf5(os.path.join(self.path, "y_va.h5"), 'y_va')
         if self.verbose:
@@ -163,8 +163,8 @@ class AudioToH5Converter:
             print("VALIDATION DATA SHAPE:", x[va_idx].shape)
             print("VALIDATION LABELS SHAPE:", y[va_idx].shape)
 
-        del x
+        del x, y
         self._del_previous_data("temp.h5")
         print()
 
-        self.out_files = [os.path.join(self.path, f) for f in ["x_tr.h5", "y_tr.h5", "x_va.h5", "y_va.h5"]]
+        self.out_files = {f: os.path.join(self.path, f + ".h5") for f in ["x", "y", "x_va", "y_va"]}

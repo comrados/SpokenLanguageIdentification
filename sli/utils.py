@@ -19,3 +19,8 @@ def files_langs_to_csv(files_list, path, csv_name):
         return os.path.join(path, csv_name)
     else:
         return None
+
+
+def nn_res_to_csv(arr, path, csv_name):
+    df = pd.DataFrame(arr)
+    df.to_csv(os.path.join(path, csv_name), index=False)
