@@ -23,7 +23,6 @@ def _get_file_names_from_url(url):
 
 def _to_wav(file, name, ext):
     """convert file to wav, if not wav"""
-
     new_name = name + ".wav"
     audio = AudioSegment.from_file(file, format=ext[1:])
     audio.export(new_name, format="wav")
@@ -126,7 +125,7 @@ class AudioCrawlerVoxforge:
                         self.file_lang_list.append({"file": full_name, "lang": lang})
             tar.close()
         except:
-            print("FAILED TO EXTRACT FROM:", os.path.join(path.file))
+            print("FAILED TO EXTRACT FROM:", os.path.join(path, file))
 
     def _extract_file_one(self, path, file, lang):
         self._extract_file_many(path, file, lang, self.out_path)
