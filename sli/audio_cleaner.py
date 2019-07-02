@@ -174,27 +174,31 @@ class AudioCleaner:
         """
         cleans audio file
         """
-        signal, rate = librosa.core.load(file_path, sr=None)
-        signal_orig = np.copy(signal)
+        try:
+            signal, rate = librosa.core.load(file_path, sr=None)
+            signal_orig = np.copy(signal)
 
-        # dynamic range compression
-        if self.drc:
-            signal = self._dynamic_range_compression(signal)
+            # dynamic range compression
+            if self.drc:
+                signal = self._dynamic_range_compression(signal)
 
-        if np.max(np.abs(signal)) <= self.min_silence:
-            if self.verbose:
-                print('TOO QUIET:', os.path.basename(file_path), end="\r")
+            if np.max(np.abs(signal)) <= self.min_silence:
+                if self.verbose:
+                    print('TOO QUIET:', os.path.basename(file_path), end="\r")
+                return
+
+            # filter
+            signal, mask = self._apply_filter(signal, rate, self.min_silence)
+
+            # amplitude magnification
+            scaled_min_silence = self.min_silence
+            if self.amp_mag:
+                signal, scaled_min_silence = _mul_sig_silence(signal, self.min_silence)
+
+            return signal_orig, signal, mask, rate, scaled_min_silence
+        except:
+            print("FAILED TO CLEAN", file_path)
             return
-
-        # filter
-        signal, mask = self._apply_filter(signal, rate, self.min_silence)
-
-        # amplitude magnification
-        scaled_min_silence = self.min_silence
-        if self.amp_mag:
-            signal, scaled_min_silence = _mul_sig_silence(signal, self.min_silence)
-
-        return signal_orig, signal, mask, rate, scaled_min_silence
 
     def _output(self, out_path, file, res, min_time, lang, plotting):
         """saves clean audio, plots, writes console messages"""
