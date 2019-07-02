@@ -7,15 +7,6 @@ import numpy as np
 from . import utils
 
 
-def n_largest_setarr(a, n=1):
-    """n-largest element of each row is set to 1, other elements - 0"""
-    # a : Input array
-    # n : We want n-max element position to be set to 1
-    out = np.zeros_like(a)
-    out[np.arange(len(a)), np.argpartition(a, -n, axis=1)[:, -n]] = 1
-    return out
-
-
 class AudioLangRecognitionNN:
 
     def __init__(self, path: str, epochs: int = 50, model: str or tf.keras.models.Sequential = None,
@@ -163,7 +154,7 @@ class AudioLangRecognitionNN:
                 print("LOSS:", eval[0], "ACCURACY:", eval[1])
         print("PREDICTING LABELS")
         pr = self.model.predict(self.data['x'], batch_size=100)
-        pr_l = n_largest_setarr(pr)
+        pr_l = self.n_largest_setarr(pr)
         self._save_predict_res(save, pr, pr_l)
         return pr, pr_l, ev
 
@@ -172,3 +163,10 @@ class AudioLangRecognitionNN:
             utils.nn_res_to_csv(pr, self.path, "prediction_probabilities.csv")
         if save in ['labels', 'both']:
             utils.nn_res_to_csv(pr_l, self.path, "prediction_labels.csv")
+
+    @staticmethod
+    def n_largest_setarr(arr, n=1):
+        """n-largest element of each row is set to 1, other elements - 0"""
+        out = np.zeros_like(arr)
+        out[np.arange(len(arr)), np.argpartition(arr, -n, axis=1)[:, -n]] = 1
+        return out

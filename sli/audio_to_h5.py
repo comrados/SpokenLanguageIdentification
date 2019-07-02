@@ -9,69 +9,6 @@ import matplotlib.pyplot as plt
 import random
 
 
-def _imread(filenames, imread=None, preprocess=None):
-    """
-    modified dask imread method, accepts list of file names instead of glob string
-    """
-
-    def add_leading_dimension(x):
-        return x[None, ...]
-
-    imread = imread or sk_imread
-    name = 'imread-%s' % tokenize(filenames, map(os.path.getmtime, filenames))
-
-    sample = imread(filenames[0])
-    if preprocess:
-        sample = preprocess(sample)
-
-    keys = [(name, i) + (0,) * len(sample.shape) for i in range(len(filenames))]
-    if preprocess:
-        values = [(add_leading_dimension, (preprocess, (imread, fn)))
-                  for fn in filenames]
-    else:
-        values = [(add_leading_dimension, (imread, fn))
-                  for fn in filenames]
-    dsk = dict(zip(keys, values))
-
-    chunks = ((1,) * len(filenames),) + tuple((d,) for d in sample.shape)
-
-    return da.Array(dsk, name, chunks, sample.dtype)
-
-
-def _plot(files):
-    """
-    plot random samples
-    """
-    # read data
-    x_tr = da.from_array(h5py.File(files[0])['x'], chunks=1000)
-    y_tr = da.from_array(h5py.File(files[1])['y'], chunks=1000)
-    x_va = da.from_array(h5py.File(files[2])['x_va'], chunks=1000)
-    y_va = da.from_array(h5py.File(files[3])['y_va'], chunks=1000)
-    print("TRAINING SAMPLES:", x_tr.shape, "TRAINING LABELS:", y_tr.shape)
-    print("VALIDATION SAMPLES:", x_va.shape, "VALIDATION LABELS:", y_va.shape)
-    x_tr /= 255.
-    x_va /= 255.
-    _plot_samples(x_va, y_va, 'Validation', shape=(2, 2))
-    _plot_samples(x_tr, y_tr, 'Training', shape=(2, 2))
-
-
-def _plot_samples(data, labels, title, shape=(2, 2)):
-    """plots random samples from h5 files"""
-    h = shape[0]
-    w = shape[1]
-    n = h * w
-    rands = [random.randint(0, len(data)) for _ in range(n)]
-    plt.set_cmap('gray')
-    plt.suptitle(title)
-    for i in range(1, n + 1):
-        label = np.array(labels[rands[i - 1]])
-        plt.subplot(h, w, i)
-        plt.title("Sample " + str(rands[i - 1]) + " " + str(label))
-        plt.axis('off')
-        plt.imshow(data[rands[i - 1], :, :, 0], )
-    plt.show()
-
-
 class AudioToH5Converter:
 
     def __init__(self, path: str, audios: str, val_part: float = 0.25, transpose: bool = False, plotting: bool = False,
@@ -96,7 +33,7 @@ class AudioToH5Converter:
     def convert(self):
         self._get_h5_datasets()
         if self.plotting:
-            _plot(self.out_files)
+            self._plot(self.out_files)
         return self.out_files
 
     def _del_previous_data(self, *name):
@@ -114,9 +51,9 @@ class AudioToH5Converter:
     def _pics_to_h5(self, filenames, target, name):
         """array of pictures to h5"""
         if self.transpose:
-            arr = _imread(filenames, preprocess=np.transpose)
+            arr = self._imread(filenames, preprocess=np.transpose)
         else:
-            arr = _imread(filenames)
+            arr = self._imread(filenames)
         if len(arr.shape) == 3:
             arr = arr.reshape(arr.shape + (1,))
         arr.to_hdf5(target, name)
@@ -168,3 +105,65 @@ class AudioToH5Converter:
         print()
 
         self.out_files = {f: os.path.join(self.path, f + ".h5") for f in ["x", "y", "x_va", "y_va"]}
+
+    @staticmethod
+    def _imread(filenames, imread=None, preprocess=None):
+        """
+        modified dask imread method, accepts list of file names instead of glob string
+        """
+
+        def add_leading_dimension(x):
+            return x[None, ...]
+
+        imread = imread or sk_imread
+        name = 'imread-%s' % tokenize(filenames, map(os.path.getmtime, filenames))
+
+        sample = imread(filenames[0])
+        if preprocess:
+            sample = preprocess(sample)
+
+        keys = [(name, i) + (0,) * len(sample.shape) for i in range(len(filenames))]
+        if preprocess:
+            values = [(add_leading_dimension, (preprocess, (imread, fn)))
+                      for fn in filenames]
+        else:
+            values = [(add_leading_dimension, (imread, fn))
+                      for fn in filenames]
+        dsk = dict(zip(keys, values))
+
+        chunks = ((1,) * len(filenames),) + tuple((d,) for d in sample.shape)
+
+        return da.Array(dsk, name, chunks, sample.dtype)
+
+    def _plot(self, files):
+        """
+        plot random samples
+        """
+        # read data
+        x_tr = da.from_array(h5py.File(files[0])['x'], chunks=1000)
+        y_tr = da.from_array(h5py.File(files[1])['y'], chunks=1000)
+        x_va = da.from_array(h5py.File(files[2])['x_va'], chunks=1000)
+        y_va = da.from_array(h5py.File(files[3])['y_va'], chunks=1000)
+        print("TRAINING SAMPLES:", x_tr.shape, "TRAINING LABELS:", y_tr.shape)
+        print("VALIDATION SAMPLES:", x_va.shape, "VALIDATION LABELS:", y_va.shape)
+        x_tr /= 255.
+        x_va /= 255.
+        self._plot_samples(x_va, y_va, 'Validation', shape=(2, 2))
+        self._plot_samples(x_tr, y_tr, 'Training', shape=(2, 2))
+
+    @staticmethod
+    def _plot_samples(data, labels, title, shape=(2, 2)):
+        """plots random samples from h5 files"""
+        h = shape[0]
+        w = shape[1]
+        n = h * w
+        rands = [random.randint(0, len(data)) for _ in range(n)]
+        plt.set_cmap('gray')
+        plt.suptitle(title)
+        for i in range(1, n + 1):
+            label = np.array(labels[rands[i - 1]])
+            plt.subplot(h, w, i)
+            plt.title("Sample " + str(rands[i - 1]) + " " + str(label))
+            plt.axis('off')
+            plt.imshow(data[rands[i - 1], :, :, 0], )
+        plt.show()

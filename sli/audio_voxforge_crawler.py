@@ -8,28 +8,6 @@ from pydub import AudioSegment
 from . import utils
 
 
-def _get_file_names_from_url(url):
-    files = []
-    response = request.urlopen(url)
-    html = response.read().decode('utf-8')
-
-    pattern = '(?i)<A HREF="(.*?)">(.*?)</A>'
-
-    for filename in re.findall(pattern, html):
-        if filename[0] == filename[1]:
-            files.append(filename[0])
-    return files
-
-
-def _to_wav(file, name, ext):
-    """convert file to wav, if not wav"""
-    new_name = name + ".wav"
-    audio = AudioSegment.from_file(file, format=ext[1:])
-    audio.export(new_name, format="wav")
-    os.remove(file)
-    return new_name
-
-
 class AudioCrawlerVoxforge:
 
     def __init__(self, links_dict: dict, path: str, audios: str = "audios", archives="archives", limit: int = 100,
@@ -96,7 +74,7 @@ class AudioCrawlerVoxforge:
         for lang, url in self.links_dict.items():
             out = utils.check_path(self.out_path, lang, self.archives)
 
-            files = _get_file_names_from_url(url)
+            files = self._get_file_names_from_url(url)
 
             print('FOUND TOTAL', len(files), 'FILES IN:', url)
             print('DOWNLOADING UP TO', self.limit, 'FILES TO:', out)
@@ -121,7 +99,7 @@ class AudioCrawlerVoxforge:
                             out.write(tar.extractfile(item).read())
                             out.close()
                             if file_extension != '.wav':
-                                full_name = _to_wav(full_name, file_name, file_extension)
+                                full_name = self._to_wav(full_name, file_name, file_extension)
                         self.file_lang_list.append({"file": full_name, "lang": lang})
             tar.close()
         except:
@@ -164,3 +142,25 @@ class AudioCrawlerVoxforge:
             if i + 1 == len(files) or (i + 1) % 10 == 0:
                 print("FILES EXTRACTED:", i + 1)
         print()
+
+    @staticmethod
+    def _get_file_names_from_url(url):
+        files = []
+        response = request.urlopen(url)
+        html = response.read().decode('utf-8')
+
+        pattern = '(?i)<A HREF="(.*?)">(.*?)</A>'
+
+        for filename in re.findall(pattern, html):
+            if filename[0] == filename[1]:
+                files.append(filename[0])
+        return files
+
+    @staticmethod
+    def _to_wav(file, name, ext):
+        """convert file to wav, if not wav"""
+        new_name = name + ".wav"
+        audio = AudioSegment.from_file(file, format=ext[1:])
+        audio.export(new_name, format="wav")
+        os.remove(file)
+        return new_name

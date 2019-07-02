@@ -9,92 +9,6 @@ from PIL import Image, ImageOps
 from . import utils
 
 
-def _get_random_offsets(w, l, n):
-    """random offsets"""
-    offsets = []
-    i = 0
-    while i < n:
-        offset = random.randint(0, w - l - 1)
-        if offset in offsets:
-            continue
-        else:
-            i += 1
-            offsets.append(offset)
-            offsets.append(offset + l)
-    return offsets
-
-
-def _get_uniform_offsets(w, l, n):
-    """uniformly distributed offsets"""
-    starts = np.linspace(0, w - l - 1, num=n, dtype=int)
-    offsets = []
-    for start in starts:
-        offsets.append(start)
-        offsets.append(start + l)
-    return offsets
-
-
-def _get_gauss_offsets(w, l, n):
-    """normally distributed offsets"""
-    offsets = []
-    i = 0
-    while i < n:
-        # distribution with mean (w-l-1)/2 and 3-sigma interval (w-l-1)/2
-        offset = int(np.minimum(np.maximum(0, np.random.normal((w - l - 1) / 2, (w - l - 1) / 2 / 3)), w - l - 1))
-        if offset in offsets:
-            continue
-        else:
-            i += 1
-            offsets.append(offset)
-            offsets.append(offset + l)
-    return offsets
-
-
-def _scale_arr(arr, k):
-    """scale array values by factor k, return as int"""
-    arr = arr * k
-    return arr.astype(np.int32)
-
-
-def _normalize(arr):
-    """normalize array values, normalized values range from 0 to 1"""
-    max_value = np.max(arr)
-    min_value = np.min(arr)
-    return (arr - min_value) / (max_value - min_value)
-
-
-def _get_min_unique_count(df):
-    """counts files of distinct languages, returns min"""
-    return df.groupby('lang')['file'].nunique().min()
-
-
-def _plot_patches(patches, sampling):
-    """plot patches"""
-    for i in range(1, len(patches) + 1):
-        plt.subplot(1, len(patches), i)
-        plt.axis('off')
-        plt.title(str(i + 1))
-        plt.imshow(patches[i - 1], origin="lower")
-    plt.suptitle(str(len(patches)) + ' spectrogram patches, ' + sampling + ' sampling')
-    plt.show()
-
-
-def _plot_spec(spec, offsets):
-    """plot spectrogram"""
-    new = np.copy(spec)
-    new[:, offsets] = 255
-    plt.subplot(1, 2, 1)
-    plt.imshow(new, origin="lower")
-    plt.axis('off')
-    plt.title('With offsets')
-    plt.subplot(1, 2, 2)
-    plt.axis('off')
-    plt.imshow(spec, origin="lower")
-    plt.title('Pure')
-    plt.suptitle('Full spectrogram')
-    plt.show()
-
-
 class AudioSpectrumExtractor:
 
     def __init__(self, path: str, audios: str, spec: str = "audios_spec", balanced: bool = True, n_patches: int = 10,
@@ -143,13 +57,13 @@ class AudioSpectrumExtractor:
     def _get_offsets(self, w):
         """wrapper for offsets acquisition"""
         if self.patch_sampling is 'random':
-            return _get_random_offsets(w, self.patch_width, self.n_patches)
+            return self._get_random_offsets(w, self.patch_width, self.n_patches)
         elif self.patch_sampling is 'uniform':
-            return _get_uniform_offsets(w, self.patch_width, self.n_patches)
+            return self._get_uniform_offsets(w, self.patch_width, self.n_patches)
         elif self.patch_sampling is 'gauss':
-            return _get_gauss_offsets(w, self.patch_width, self.n_patches)
+            return self._get_gauss_offsets(w, self.patch_width, self.n_patches)
         else:
-            return _get_random_offsets(w, self.patch_width, self.n_patches)
+            return self._get_random_offsets(w, self.patch_width, self.n_patches)
 
     def _get_spectrogram(self, file_path):
         """
@@ -161,7 +75,7 @@ class AudioSpectrumExtractor:
         spec = lr.feature.melspectrogram(y=y, sr=sr, n_mels=self.n_mels, hop_length=hop)
         db = lr.power_to_db(spec, ref=np.max)
         # rescale magnitudes: 0 to 255
-        scaled = _scale_arr(_normalize(db), 255).astype(np.uint8)
+        scaled = self._scale_arr(self._normalize(db), 255).astype(np.uint8)
         return scaled
 
     def _get_patches(self, spec):
@@ -206,7 +120,7 @@ class AudioSpectrumExtractor:
         """calculate spectrogram and extract patches"""
         # read files
         df = self._read_and_shuffle_df()
-        threshold = _get_min_unique_count(df)  # number of files drawn for each language (for dataset balance)
+        threshold = self._get_min_unique_count(df)  # number of files drawn for each language (for dataset balance)
         counts = {u: 0 for u in df['lang'].unique()}  # dict for saving counts of processed files
         print("CONVERTING UP TO", df.shape[0], "FILES INTO SPECTROGRAMS")
         print("LANGUAGES:", len(counts))
@@ -244,8 +158,8 @@ class AudioSpectrumExtractor:
 
             # plotting
             if self.plotting:
-                _plot_patches(patches, self.patch_sampling)
-                _plot_spec(scaled, offsets)
+                self._plot_patches(patches, self.patch_sampling)
+                self._plot_spec(scaled, offsets)
 
             # increasing counter
             counts[lang] += 1
@@ -256,3 +170,89 @@ class AudioSpectrumExtractor:
         spec_csv = utils.files_langs_to_csv(self.spec_lang_list, self.path, "audios_spec.csv")
         spec_full_csv = utils.files_langs_to_csv(self.spec_full_lang_list, self.path, "audios_spec_full.csv")
         return spec_csv, spec_full_csv
+
+    @staticmethod
+    def _get_random_offsets(w, l, n):
+        """random offsets"""
+        offsets = []
+        i = 0
+        while i < n:
+            offset = random.randint(0, w - l - 1)
+            if offset in offsets:
+                continue
+            else:
+                i += 1
+                offsets.append(offset)
+                offsets.append(offset + l)
+        return offsets
+
+    @staticmethod
+    def _get_uniform_offsets(w, l, n):
+        """uniformly distributed offsets"""
+        starts = np.linspace(0, w - l - 1, num=n, dtype=int)
+        offsets = []
+        for start in starts:
+            offsets.append(start)
+            offsets.append(start + l)
+        return offsets
+
+    @staticmethod
+    def _get_gauss_offsets(w, l, n):
+        """normally distributed offsets"""
+        offsets = []
+        i = 0
+        while i < n:
+            # distribution with mean (w-l-1)/2 and 3-sigma interval (w-l-1)/2
+            offset = int(np.minimum(np.maximum(0, np.random.normal((w - l - 1) / 2, (w - l - 1) / 2 / 3)), w - l - 1))
+            if offset in offsets:
+                continue
+            else:
+                i += 1
+                offsets.append(offset)
+                offsets.append(offset + l)
+        return offsets
+
+    @staticmethod
+    def _scale_arr(arr, k):
+        """scale array values by factor k, return as int"""
+        arr = arr * k
+        return arr.astype(np.int32)
+
+    @staticmethod
+    def _normalize(arr):
+        """normalize array values, normalized values range from 0 to 1"""
+        max_value = np.max(arr)
+        min_value = np.min(arr)
+        return (arr - min_value) / (max_value - min_value)
+
+    @staticmethod
+    def _get_min_unique_count(df):
+        """counts files of distinct languages, returns min"""
+        return df.groupby('lang')['file'].nunique().min()
+
+    @staticmethod
+    def _plot_patches(patches, sampling):
+        """plot patches"""
+        for i in range(1, len(patches) + 1):
+            plt.subplot(1, len(patches), i)
+            plt.axis('off')
+            plt.title(str(i + 1))
+            plt.imshow(patches[i - 1], origin="lower")
+        plt.suptitle(str(len(patches)) + ' spectrogram patches, ' + sampling + ' sampling')
+        plt.show()
+
+    @staticmethod
+    def _plot_spec(spec, offsets):
+        """plot spectrogram"""
+        new = np.copy(spec)
+        new[:, offsets] = 255
+        plt.subplot(1, 2, 1)
+        plt.imshow(new, origin="lower")
+        plt.axis('off')
+        plt.title('With offsets')
+        plt.subplot(1, 2, 2)
+        plt.axis('off')
+        plt.imshow(spec, origin="lower")
+        plt.title('Pure')
+        plt.suptitle('Full spectrogram')
+        plt.show()

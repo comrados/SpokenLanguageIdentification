@@ -10,94 +10,6 @@ import matplotlib.pyplot as plt
 import time
 
 
-def _calc_fft(rate, samples):
-    """calculate fft and frequencies"""
-    n = len(samples)
-    freq = fftfreq(n, d=1 / rate)
-    y = fft(samples)
-    return y, freq
-
-
-def _cut_freq(fft, freq, low, hi):
-    """nullify fft frequencies that larger and smaller than thresholds"""
-    ids = freq >= hi
-    fft[ids] = 0
-    ids = freq <= low
-    fft[ids] = 0
-    return fft
-
-
-def _fft_filter(signal, rate, low, hi):
-    """filter signal via fft frequencies cutting"""
-    signal_fft, freq = _calc_fft(rate, signal)
-    filtered_fft = _cut_freq(signal_fft, freq, low, hi)
-    signal_ifft = ifft(filtered_fft)
-    return signal_ifft.real
-
-
-def _butter_bandpass(lowcut, highcut, fs, order=5):
-    """butterwoth bandpass"""
-    nyq = 0.5 * fs
-    low = lowcut / nyq
-    high = highcut / nyq
-    b, a = butter(order, [low, high], btype='band')
-    return b, a
-
-
-def _butter_bandpass_filter(signal, rate, low, hi, order=6):
-    """butterwoth bandpass filter"""
-    b, a = _butter_bandpass(low, hi, rate, order=order)
-    y = filtfilt(b, a, signal)
-    return y
-
-
-def _mul_sig_silence(signal, min_silence):
-    """scales signals (and silence values)"""
-    k = 0.9 / np.max(np.abs(signal))
-    signal = (signal * k)
-    min_silence = min_silence * k
-    return signal, min_silence
-
-
-def _plot(orig, signal, mask, rate, s='title'):
-    """plot signals"""
-    plt.title(s)
-    plt.plot(np.arange(len(signal))[mask] / rate, signal[mask], 'lime', alpha=0.5, label='converted')
-    plt.plot(np.arange(len(orig)) / rate, orig, 'blue', alpha=0.5, label='orig')
-    plt.grid()
-    plt.legend()
-    plt.show()
-    time.sleep(0.1)
-
-
-def _convert_to_16bit_pcm(signal):
-    """convert floating point wav to 16-bit pcm"""
-    ids = signal >= 0
-    signal[ids] = signal[ids] * 32767
-    ids = signal < 0
-    signal[ids] = signal[ids] * 32768
-    return signal.astype(np.int16)
-
-
-def _save_audio(path, rate, signal):
-    """save audio with optional conversion to 16-bit pcm"""
-    if 0.0 <= np.max(np.abs(signal)) <= 1.0:
-        wav.write(path, rate, _convert_to_16bit_pcm(signal))
-    else:
-        wav.write(path, rate, signal)
-
-
-def _drc_hard_knee(dbs, threshold, scale=2, direction='up'):
-    """hard knee dynamic range compression filter"""
-    new = np.copy(dbs)
-    if direction is 'down':
-        mask = np.where(new > threshold, True, False)
-    else:
-        mask = np.where(new < threshold, True, False)
-    new[mask] = new[mask] * scale - threshold * (scale - 1)
-    return new
-
-
 class AudioCleaner:
 
     def __init__(self, path: str, audios_dirty: str, audios_clean: str = "audios_clean", one_folder: bool = False,
@@ -145,9 +57,9 @@ class AudioCleaner:
     def _apply_filter(self, signal, rate, min_silence):
         """applies filter"""
         if self.f['type'] == 'fft':
-            signal = _fft_filter(signal, rate, self.f['low'], self.f['high'])
+            signal = self._fft_filter(signal, rate, self.f['low'], self.f['high'])
         elif self.f['type'] == 'butter':
-            signal = _butter_bandpass_filter(signal, rate, self.f['low'], self.f['high'])
+            signal = self._butter_bandpass_filter(signal, rate, self.f['low'], self.f['high'])
         else:
             pass
         mask = self._envelope(signal, rate, min_silence)
@@ -164,7 +76,7 @@ class AudioCleaner:
             return signal
 
         for param in self.drc_param:
-            dbs = _drc_hard_knee(dbs, threshold, param[0], direction=param[1])
+            dbs = self._drc_hard_knee(dbs, threshold, param[0], direction=param[1])
 
         amps_new = librosa.core.db_to_amplitude(dbs)
         amps_new[mask] = amps_new[mask] * (-1)
@@ -193,7 +105,7 @@ class AudioCleaner:
             # amplitude magnification
             scaled_min_silence = self.min_silence
             if self.amp_mag:
-                signal, scaled_min_silence = _mul_sig_silence(signal, self.min_silence)
+                signal, scaled_min_silence = self._mul_sig_silence(signal, self.min_silence)
 
             return signal_orig, signal, mask, rate, scaled_min_silence
         except:
@@ -214,8 +126,8 @@ class AudioCleaner:
         if self.verbose:
             print(s, end="\r")
         if plotting:
-            _plot(signal_orig, signal, mask, rate, s=s)
-        _save_audio(os.path.join(out_path, file), rate, signal[mask])
+            self._plot(signal_orig, signal, mask, rate, s=s)
+        self._save_audio(os.path.join(out_path, file), rate, signal[mask])
         self.file_lang_list.append({'file': os.path.join(out_path, file), 'lang': lang})
 
     def clean(self):
@@ -248,3 +160,88 @@ class AudioCleaner:
                 print("FILES CLEANED:", idx + 1)
         print()
         return utils.files_langs_to_csv(self.file_lang_list, self.path, "audios_clean_list.csv")
+
+    @staticmethod
+    def _calc_fft(rate, samples):
+        """calculate fft and frequencies"""
+        n = len(samples)
+        freq = fftfreq(n, d=1 / rate)
+        y = fft(samples)
+        return y, freq
+
+    @staticmethod
+    def _cut_freq(fft, freq, low, hi):
+        """nullify fft frequencies that larger and smaller than thresholds"""
+        ids = freq >= hi
+        fft[ids] = 0
+        ids = freq <= low
+        fft[ids] = 0
+        return fft
+
+    def _fft_filter(self, signal, rate, low, hi):
+        """filter signal via fft frequencies cutting"""
+        signal_fft, freq = self._calc_fft(rate, signal)
+        filtered_fft = self._cut_freq(signal_fft, freq, low, hi)
+        signal_ifft = ifft(filtered_fft)
+        return signal_ifft.real
+
+    @staticmethod
+    def _butter_bandpass(lowcut, highcut, fs, order=5):
+        """butterwoth bandpass"""
+        nyq = 0.5 * fs
+        low = lowcut / nyq
+        high = highcut / nyq
+        b, a = butter(order, [low, high], btype='band')
+        return b, a
+
+    def _butter_bandpass_filter(self, signal, rate, low, hi, order=6):
+        """butterwoth bandpass filter"""
+        b, a = self._butter_bandpass(low, hi, rate, order=order)
+        y = filtfilt(b, a, signal)
+        return y
+
+    @staticmethod
+    def _mul_sig_silence(signal, min_silence):
+        """scales signals (and silence values)"""
+        k = 0.9 / np.max(np.abs(signal))
+        signal = (signal * k)
+        min_silence = min_silence * k
+        return signal, min_silence
+
+    @staticmethod
+    def _plot(orig, signal, mask, rate, s='title'):
+        """plot signals"""
+        plt.title(s)
+        plt.plot(np.arange(len(signal))[mask] / rate, signal[mask], 'lime', alpha=0.5, label='converted')
+        plt.plot(np.arange(len(orig)) / rate, orig, 'blue', alpha=0.5, label='orig')
+        plt.grid()
+        plt.legend()
+        plt.show()
+        time.sleep(0.1)
+
+    @staticmethod
+    def _convert_to_16bit_pcm(signal):
+        """convert floating point wav to 16-bit pcm"""
+        ids = signal >= 0
+        signal[ids] = signal[ids] * 32767
+        ids = signal < 0
+        signal[ids] = signal[ids] * 32768
+        return signal.astype(np.int16)
+
+    def _save_audio(self, path, rate, signal):
+        """save audio with optional conversion to 16-bit pcm"""
+        if 0.0 <= np.max(np.abs(signal)) <= 1.0:
+            wav.write(path, rate, self._convert_to_16bit_pcm(signal))
+        else:
+            wav.write(path, rate, signal)
+
+    @staticmethod
+    def _drc_hard_knee(dbs, threshold, scale=2, direction='up'):
+        """hard knee dynamic range compression filter"""
+        new = np.copy(dbs)
+        if direction is 'down':
+            mask = np.where(new > threshold, True, False)
+        else:
+            mask = np.where(new < threshold, True, False)
+        new[mask] = new[mask] * scale - threshold * (scale - 1)
+        return new
