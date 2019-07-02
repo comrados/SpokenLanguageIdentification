@@ -77,15 +77,19 @@ class AudioCrawlerVoxforge:
             if not os.path.exists(os.path.join(out, file)):
                 if j == limit or j % 10 == 0:
                     print("FILES DOWNLOADED:", j)
-                j += 1
-                if j > limit:
-                    break
-                if self.verbose:
-                    print('(' + str(j) + '/' + str(len(files)) + '):', file)
-                out_file = open(os.path.join(out, file), 'wb')
-                response = request.urlopen(value + file)
-                shutil.copyfileobj(response, out_file)
-                out_file.close()
+                try:
+                    j += 1
+                    if j > limit:
+                        break
+                    if self.verbose:
+                        print('(' + str(j) + '/' + str(len(files)) + '):', file)
+                    out_file = open(os.path.join(out, file), 'wb')
+                    response = request.urlopen(value + file)
+                    shutil.copyfileobj(response, out_file)
+                    out_file.close()
+                except:
+                    j -= 1
+                    print("FAILED TO GET:", file)
 
     def _voxforge_download(self):
         """parse given link to find all files, matching the pattern, download files"""
@@ -106,20 +110,23 @@ class AudioCrawlerVoxforge:
     def _extract_file_many(self, path, file, lang, out_path):
         """extract wav files from archive"""
         name, ext = os.path.splitext(file)
-        tar = tarfile.open(path + '/' + file, 'r')
-        for item in tar:
-            if item.isfile():
-                full_name = os.path.join(out_path, name + '-' + os.path.basename(item.name))
-                file_name, file_extension = os.path.splitext(full_name)
-                if len(file_extension) != 0 and file_extension != '.txt':
-                    if not os.path.exists(full_name):
-                        out = open(full_name, 'wb+')
-                        out.write(tar.extractfile(item).read())
-                        out.close()
-                        if file_extension != '.wav':
-                            full_name = _to_wav(full_name, file_name, file_extension)
-                    self.file_lang_list.append({"file": full_name, "lang": lang})
-        tar.close()
+        try:
+            tar = tarfile.open(os.path.join(path, file), 'r')
+            for item in tar:
+                if item.isfile():
+                    full_name = os.path.join(out_path, name + '-' + os.path.basename(item.name))
+                    file_name, file_extension = os.path.splitext(full_name)
+                    if len(file_extension) != 0 and file_extension != '.txt':
+                        if not os.path.exists(full_name):
+                            out = open(full_name, 'wb+')
+                            out.write(tar.extractfile(item).read())
+                            out.close()
+                            if file_extension != '.wav':
+                                full_name = _to_wav(full_name, file_name, file_extension)
+                        self.file_lang_list.append({"file": full_name, "lang": lang})
+            tar.close()
+        except:
+            print("FAILED TO EXTRACT FROM:", os.path.join(path.file))
 
     def _extract_file_one(self, path, file, lang):
         self._extract_file_many(path, file, lang, self.out_path)
