@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+import numpy as np
 
 
 def check_path(*elements):
@@ -21,6 +22,6 @@ def files_langs_to_csv(files_list, path, csv_name):
         return None
 
 
-def nn_res_to_csv(arr, path, csv_name):
-    df = pd.DataFrame(arr)
+def arr_to_csv(arr, path, csv_name):
+    df = pd.DataFrame(np.array(arr))
     df.to_csv(os.path.join(path, csv_name), index=False)

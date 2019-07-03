@@ -7,6 +7,7 @@ from skimage.io import imread as sk_imread
 from dask.base import tokenize
 import matplotlib.pyplot as plt
 import random
+from . import utils
 
 
 class AudioToH5Converter:
@@ -94,6 +95,8 @@ class AudioToH5Converter:
         y[tr_idx].to_hdf5(os.path.join(self.path, "y.h5"), 'y')
         x[va_idx].to_hdf5(os.path.join(self.path, "x_va.h5"), 'x_va')
         y[va_idx].to_hdf5(os.path.join(self.path, "y_va.h5"), 'y_va')
+        utils.arr_to_csv(y[tr_idx], self.path, "tr_labels.csv")
+        utils.arr_to_csv(y[va_idx], self.path, "va_labels.csv")
         if self.verbose:
             print("TRAINING DATA SHAPE:", x[tr_idx].shape)
             print("TRAINING LABELS SHAPE:", y[tr_idx].shape)

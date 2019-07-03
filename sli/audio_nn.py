@@ -160,9 +160,9 @@ class AudioLangRecognitionNN:
 
     def _save_predict_res(self, save, pr, pr_l):
         if save in ['probab', 'both']:
-            utils.nn_res_to_csv(pr, self.path, "prediction_probabilities.csv")
+            utils.arr_to_csv(pr, self.path, "prediction_probabilities.csv")
         if save in ['labels', 'both']:
-            utils.nn_res_to_csv(pr_l, self.path, "prediction_labels.csv")
+            utils.arr_to_csv(pr_l, self.path, "prediction_labels.csv")
 
     @staticmethod
     def n_largest_setarr(arr, n=1):
