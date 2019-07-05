@@ -14,7 +14,7 @@ class AudioSpectrumExtractor:
     def __init__(self, path: str, audios: str, spec: str = "audios_spec", balanced: bool = True, n_patches: int = 10,
                  seed: int = None, frame_length: float = 25.0, patch_height: int = 100, patch_length: float = 1.0,
                  save_as: str = 'both', patch_sampling: str = 'random', save_full_spec: str = None, invert_colors=False,
-                 plotting: bool = False, verbose: bool = False):
+                 h5_val_part: float = 0.15, plotting: bool = False, verbose: bool = False):
         """
         Initialize audio spectrogram extractor
 
@@ -27,10 +27,11 @@ class AudioSpectrumExtractor:
         :param frame_length: spectrogram frame length in milliseconds
         :param patch_height: spectrogram height (quantity of spectrogram mels)
         :param patch_length: length of patch in seconds
-        :param save_as: save as images - 'img', h5 file - 'h5', both - 'both'
+        :param save_as: save as images - 'img', h5-file - 'h5', both - 'both'
         :param patch_sampling: patch sampling: 'random' - random, 'gauss' - normal, 'uniform' - uniformly separated
         :param save_full_spec: path to save full spectrograms, doesn't save if None
         :param invert_colors: spectrogram background color ('white or black')
+        :param h5_val_part: validation part (only for h5-file)
         :param plotting: plot spectrogram and patches
         :param verbose: verbose output
         """
@@ -51,6 +52,7 @@ class AudioSpectrumExtractor:
             utils.check_path(self.path, self.save_full_spec)
         utils.check_path(self.path, self.spec)
         self.invert_colors = invert_colors
+        self.h5_val_part = h5_val_part
         self.plotting = plotting
         self.verbose = verbose
         self.spec_lang_list = []
@@ -117,13 +119,13 @@ class AudioSpectrumExtractor:
         df = pd.read_csv(self.audios)  # read
         return df.sample(frac=1, random_state=self.seed).reset_index(drop=True)  # shuffle
 
-    def _init_h5(self, max_count, h, w, lang_count):
+    def _init_h5(self, tags, max_count, h, w, lang_count):
         """init h5 file"""
-        self.h5_file = h5py.File(os.path.join(self.path, 'data.hdf5'), 'a')
-        self.h5_file.require_dataset("x", (max_count, h, w, 1), maxshape=(max_count, h, w, 1), dtype=np.uint8)
-        self.h5_file.require_dataset("y", (max_count, lang_count), maxshape=(max_count, lang_count), dtype=np.uint8)
+        self.h5_file.require_dataset(tags[0], (max_count, h, w, 1), maxshape=(max_count, h, w, 1), dtype=np.uint8)
+        self.h5_file.require_dataset(tags[1], (max_count, lang_count), maxshape=(max_count, lang_count), dtype=np.uint8)
 
     def _try_write_to_buffer(self, entry, lang_dummy, buff_size=1000):
+        """writes to the temporary buffer"""
         if len(self.h5_buffer_x) == len(self.h5_buffer_y) and len(self.h5_buffer_y) < buff_size:
             self.h5_buffer_x.append(np.flip(entry, axis=0))
             self.h5_buffer_y.append(lang_dummy)
@@ -133,44 +135,47 @@ class AudioSpectrumExtractor:
         else:
             return False
 
-    def _flush_buffer(self, count):
+    def _flush_buffer(self, tags, count):
+        """flush buffer"""
         self.h5_buffer_x = np.array(self.h5_buffer_x, dtype=np.uint8)
         self.h5_buffer_x = self.h5_buffer_x.reshape(self.h5_buffer_x.shape + (1,))
         self.h5_buffer_y = np.array(self.h5_buffer_y)
 
-        self.h5_file["x"][count:count+len(self.h5_buffer_x)] = self.h5_buffer_x
-        self.h5_file["y"][count:count+len(self.h5_buffer_y)] = self.h5_buffer_y
+        self.h5_file[tags[0]][count:count + len(self.h5_buffer_x)] = self.h5_buffer_x
+        self.h5_file[tags[1]][count:count + len(self.h5_buffer_y)] = self.h5_buffer_y
 
-        count = count+len(self.h5_buffer_x)
+        count = count + len(self.h5_buffer_x)
 
-        self.h5_file["x"].flush()
-        self.h5_file["y"].flush()
+        self.h5_file[tags[0]].flush()
+        self.h5_file[tags[1]].flush()
 
         self.h5_buffer_x = []
         self.h5_buffer_y = []
         return count
 
-    def _write_to_h5(self, entry, lang_dummy, count, force_flush=False):
+    def _write_to_h5(self, tags, entry, lang_dummy, count, force_flush=False):
+        """buffer-wise writing to hd5"""
         if self._try_write_to_buffer(entry, lang_dummy) and not force_flush:
             pass
         else:
-            count = self._flush_buffer(count)
+            count = self._flush_buffer(tags, count)
             self._try_write_to_buffer(entry, lang_dummy)
         return count
 
-    def extract(self):
-        """calculate spectrogram and extract patches"""
-        # read files
-        df = self._read_and_shuffle_df()
-        threshold = self._get_min_unique_count(df)  # number of files drawn for each language (for dataset balance)
+    def _extract_part(self, df, part, tags, mirror_df=False):
+        """extract part spectrograms"""
+        if mirror_df:
+            df = self._mirror_df(df)
+        threshold = int(self._get_min_unique_count(df) * part)  # number of files drawn for each language
         uniques = sorted(df['lang'].unique())
         counts = {u: 0 for u in uniques}  # dict for saving counts of processed files
-        count = 0
+        count_specs = 0  # spectrograms count
         print("CONVERTING UP TO", df.shape[0], "FILES INTO SPECTROGRAMS")
         print("LANGUAGES:", len(counts))
         print("MIN FILES' COUNT PER LANGUAGE", threshold)
         if self.save_as in ('both', 'h5'):
-            self._init_h5(threshold * len(counts) * self.n_patches, self.patch_height, self.patch_width, len(counts))
+            max_count = threshold * len(counts) * self.n_patches
+            self._init_h5(tags, max_count, self.patch_height, self.patch_width, len(counts))
         for idx, row in df.iterrows():
             file_path = row['file']
             file = os.path.basename(file_path)
@@ -200,7 +205,7 @@ class AudioSpectrumExtractor:
                     self._save_spec(scaled, filename, lang)
             if self.save_as in ('both', 'h5'):
                 for patch in patches:
-                    count = self._write_to_h5(patch, self._lang_to_dummy(lang, uniques), count)
+                    count_specs = self._write_to_h5(tags, patch, self._lang_to_dummy(lang, uniques), count_specs)
                 pass
             else:
                 raise ("Wrong type of spectrograms saving: " + self.save_as)
@@ -219,14 +224,33 @@ class AudioSpectrumExtractor:
 
         print("FILES CONVERTED TOTAL:", sum(counts.values()))
         print("FILES CONVERTED FOR EACH LANGUAGE:", counts)
+
+        if self.save_as in ('both', 'h5'):
+            count_specs = self._flush_buffer(tags, count_specs)
+            print("SPECTROGRAMS FLUSHED TO H5-FILE:", count_specs)
+
+    def extract(self):
+        """calculate spectrogram and extract patches"""
+        # read files
+        df = self._read_and_shuffle_df()
+        if self.save_as in ('both', 'h5'):
+            try:
+                os.remove(os.path.join(self.path, 'data.hdf5'))
+            except Exception as err:
+                print("Impossible to remove file:", os.path.join(self.path, 'data.hdf5'), err)
+            self.h5_file = h5py.File(os.path.join(self.path, 'data.hdf5'), 'a')
+        self._extract_part(df, 1.0 - self.h5_val_part, ["x", "y"])  # training part
+        self._extract_part(df, self.h5_val_part, ["x_va", "y_va"], mirror_df=True)  # validation part
         spec_csv = utils.files_langs_to_csv(self.spec_lang_list, self.path, "audios_spec.csv")
         spec_full_csv = utils.files_langs_to_csv(self.spec_full_lang_list, self.path, "audios_spec_full.csv")
         if self.save_as in ('both', 'h5'):
-            count = self._flush_buffer(count)
-            print("SPECTROGRAMS FLUSHED TO H5-FILE:", count)
             self.h5_file.close()
         print()
         return spec_csv, spec_full_csv
+
+    @staticmethod
+    def _mirror_df(df):
+        return df.reindex(index=df.index[::-1]).reset_index(drop=True)
 
     @staticmethod
     def _lang_to_dummy(lang, uniques):

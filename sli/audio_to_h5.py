@@ -71,13 +71,13 @@ class AudioToH5Converter:
         y = df['lang']
         y = pd.get_dummies(y)
         y = y.reindex(sorted(y.columns), axis=1).values  # sort colums, get ndarray from DataFrame
-        y = da.from_array(y, chunks='auto')
+        ya = da.from_array(y, chunks='auto')
 
         # data
         temp_out_data = os.path.join(self.path, "temp.h5")
         count = self._pics_to_h5(fl, temp_out_data, "temp")
-        x = h5py.File(temp_out_data)["temp"]
-        x = da.from_array(x, chunks='auto')
+        x = h5py.File(temp_out_data)
+        xa = da.from_array(x["temp"], chunks='auto')
 
         # calculate test/validation sizes
         va_size = int(self.val_part * count)
@@ -91,19 +91,19 @@ class AudioToH5Converter:
         print("VALIDATION SET SIZE", va_size)
         print("TRAINING SET SIZE", tr_size)
 
-        x[tr_idx].to_hdf5(os.path.join(self.path, "x.h5"), 'x')
-        y[tr_idx].to_hdf5(os.path.join(self.path, "y.h5"), 'y')
-        x[va_idx].to_hdf5(os.path.join(self.path, "x_va.h5"), 'x_va')
-        y[va_idx].to_hdf5(os.path.join(self.path, "y_va.h5"), 'y_va')
-        utils.arr_to_csv(y[tr_idx], self.path, "tr_labels.csv")
-        utils.arr_to_csv(y[va_idx], self.path, "va_labels.csv")
+        xa[tr_idx].to_hdf5(os.path.join(self.path, "x.h5"), 'x')
+        ya[tr_idx].to_hdf5(os.path.join(self.path, "y.h5"), 'y')
+        xa[va_idx].to_hdf5(os.path.join(self.path, "x_va.h5"), 'x_va')
+        ya[va_idx].to_hdf5(os.path.join(self.path, "y_va.h5"), 'y_va')
+        utils.arr_to_csv(ya[tr_idx], self.path, "tr_labels.csv")
+        utils.arr_to_csv(ya[va_idx], self.path, "va_labels.csv")
         if self.verbose:
-            print("TRAINING DATA SHAPE:", x[tr_idx].shape)
+            print("TRAINING DATA SHAPE:", xa[tr_idx].shape)
             print("TRAINING LABELS SHAPE:", y[tr_idx].shape)
-            print("VALIDATION DATA SHAPE:", x[va_idx].shape)
+            print("VALIDATION DATA SHAPE:", xa[va_idx].shape)
             print("VALIDATION LABELS SHAPE:", y[va_idx].shape)
 
-        del x, y
+        x.close()
         self._del_previous_data("temp.h5")
         print()
 

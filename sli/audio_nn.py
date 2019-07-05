@@ -31,20 +31,47 @@ class AudioLangRecognitionNN:
         self.threshold = threshold
         self.epochs = epochs
 
-    def train(self, files_dict):
+    def train(self, data_path):
         """train model"""
-        self._load_data(files_dict)
+        self._load_data(data_path)
         self._build_model_for_training()
         return self._train()
 
-    def predict(self, files_dict, model=None, save=None):
+    def predict(self, data_path, model=None, save=None):
         """predict labels"""
-        self._load_data(files_dict)
+        self._load_data(data_path)
         self._load_model_for_prediction(model)
         return self._predict(save)
 
-    def _load_data(self, files_dict):
-        """load data"""
+    def _load_data(self, data_path):
+        if isinstance(data_path, dict):
+            self._load_data_dict(data_path)
+        elif isinstance(data_path, str):
+            self._load_data_string(data_path)
+        else:
+            raise Exception("Unsupported pointer to the data, must be string or dict of strings")
+
+    def _load_data_string(self, data_path):
+        """load data (from path string)"""
+        f = h5py.File(data_path)
+
+        try:
+            self.data['x_va'] = f['x_va']
+            self.data['y_va'] = f['y_va']
+        except ReferenceError:
+            print("Validation set doesn't exist")
+            self.data['x_va'] = None
+            self.data['y_va'] = None
+
+        self.data['x'] = f['x']
+        self.data['y'] = f['y']
+
+        if self.verbose:
+            for key in self.data:
+                print("SAMPLES IN '" + key + "':", self.data[key].shape)
+
+    def _load_data_dict(self, files_dict):
+        """load data (from dict of links)"""
         for key in files_dict:
             self.data[key] = da.from_array(h5py.File(files_dict[key])[key], chunks='auto')
             if self.verbose:

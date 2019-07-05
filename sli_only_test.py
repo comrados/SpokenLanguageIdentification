@@ -4,6 +4,8 @@ import os
 list_files = {'x': r'D:\speechrecogn\voxforge\x.h5',
               'y': r'D:\speechrecogn\voxforge\y.h5'}
 
+list_files = r'D:\speechrecogn\voxforge\data.hdf5'
+
 path = r"D:/speechrecogn/voxforge/"
 
 dir = r'models/'
