@@ -160,11 +160,8 @@ class AudioLangRecognitionNN:
 
         cbs.append(cb_cp)
 
-        x = self.data['x'][()] / 255.
-        x_va = self.data['x_va'][()] / 255.
-
-        history = self.model.fit(x, self.data['y'], epochs=self.epochs, batch_size=100, verbose=1,
-                                 validation_data=(x_va, self.data['y_va']), callbacks=cbs, initial_epoch=0)
+        history = self.model.fit(self.data['x'], self.data['y'], epochs=self.epochs, batch_size=100, verbose=1,
+                                 validation_data=(self.data['x_va'], self.data['y_va']), callbacks=cbs, initial_epoch=0)
 
         print("TRAINING FINISHED")
 
@@ -172,11 +169,10 @@ class AudioLangRecognitionNN:
 
     def _predict(self, save, model):
         """predicts (if only x given) and evaluate (if y also exists)"""
-        x = self.data['x'][()] / 255.
         ev = None
         if 'y' in self.data:
             print("EVALUATING MODEL:", model)
-            ev = self.model.evaluate(x=x, y=self.data['y'], batch_size=100, verbose=0)
+            ev = self.model.evaluate(x=self.data['x'], y=self.data['y'], batch_size=100, verbose=0)
             if self.verbose and ev:
                 print("LOSS:", ev[0], "ACCURACY:", ev[1])
         print("PREDICTING LABELS:", model)

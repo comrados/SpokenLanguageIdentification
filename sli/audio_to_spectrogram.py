@@ -121,13 +121,14 @@ class AudioSpectrumExtractor:
 
     def _init_h5(self, tags, max_count, h, w, lang_count):
         """init h5 file"""
-        self.h5_file.require_dataset(tags[0], (max_count, h, w, 1), maxshape=(max_count, h, w, 1), dtype=np.uint8)
-        self.h5_file.require_dataset(tags[1], (max_count, lang_count), maxshape=(max_count, lang_count), dtype=np.uint8)
+        self.h5_file.require_dataset(tags[0], (max_count, h, w, 1), maxshape=(max_count, h, w, 1), dtype=np.float16)
+        self.h5_file.require_dataset(tags[1], (max_count, lang_count), maxshape=(max_count, lang_count),
+                                     dtype=np.float16)
 
     def _try_write_to_buffer(self, entry, lang_dummy, buff_size=1000):
         """writes to the temporary buffer"""
         if len(self.h5_buffer_x) == len(self.h5_buffer_y) and len(self.h5_buffer_y) < buff_size:
-            self.h5_buffer_x.append(np.flip(entry, axis=0))
+            self.h5_buffer_x.append(np.flip(entry, axis=0) / 255.)
             self.h5_buffer_y.append(lang_dummy)
             return True
         if len(self.h5_buffer_x) != len(self.h5_buffer_y):
@@ -137,7 +138,7 @@ class AudioSpectrumExtractor:
 
     def _flush_buffer(self, tags, count):
         """flush buffer"""
-        self.h5_buffer_x = np.array(self.h5_buffer_x, dtype=np.uint8)
+        self.h5_buffer_x = np.array(self.h5_buffer_x, dtype=np.float16)
         self.h5_buffer_x = self.h5_buffer_x.reshape(self.h5_buffer_x.shape + (1,))
         self.h5_buffer_y = np.array(self.h5_buffer_y)
 
@@ -303,7 +304,7 @@ class AudioSpectrumExtractor:
     def _scale_arr(arr):
         """scale array values by factor k, return as uint8"""
         arr = arr * 255
-        return arr.astype(np.uint8)
+        return arr.astype(np.float16)
 
     @staticmethod
     def _normalize(arr):

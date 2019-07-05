@@ -1,4 +1,5 @@
 import sli
+import _old
 
 links = {'de': "http://www.repository.voxforge1.org/downloads/de/Trunk/Audio/Main/16kHz_16bit/",
          'en': "http://www.repository.voxforge1.org/downloads/SpeechCorpus/Trunk/Audio/Main/16kHz_16bit/",
@@ -34,7 +35,7 @@ patches, specs = spectre.extract()
 
 ########################################################################################################################
 
-converter = sli.AudioToH5Converter(path, patches, verbose=True, plotting=False)
+converter = _old.AudioToH5Converter(path, patches, verbose=True, plotting=False)
 files = converter.convert()
 
 ########################################################################################################################

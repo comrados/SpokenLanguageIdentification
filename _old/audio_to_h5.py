@@ -7,7 +7,7 @@ from skimage.io import imread as sk_imread
 from dask.base import tokenize
 import matplotlib.pyplot as plt
 import random
-from . import utils
+from sli import utils
 
 
 class AudioToH5Converter:
@@ -77,7 +77,7 @@ class AudioToH5Converter:
         temp_out_data = os.path.join(self.path, "temp.h5")
         count = self._pics_to_h5(fl, temp_out_data, "temp")
         x = h5py.File(temp_out_data)
-        xa = da.from_array(x["temp"], chunks='auto')
+        xa = da.from_array(x["temp"], chunks='auto') / 255.
 
         # calculate test/validation sizes
         va_size = int(self.val_part * count)
@@ -91,9 +91,9 @@ class AudioToH5Converter:
         print("VALIDATION SET SIZE", va_size)
         print("TRAINING SET SIZE", tr_size)
 
-        xa[tr_idx].to_hdf5(os.path.join(self.path, "x.h5"), 'x')
+        xa[tr_idx].astype(np.float16).to_hdf5(os.path.join(self.path, "x.h5"), 'x')
         ya[tr_idx].to_hdf5(os.path.join(self.path, "y.h5"), 'y')
-        xa[va_idx].to_hdf5(os.path.join(self.path, "x_va.h5"), 'x_va')
+        xa[va_idx].astype(np.float16).to_hdf5(os.path.join(self.path, "x_va.h5"), 'x_va')
         ya[va_idx].to_hdf5(os.path.join(self.path, "y_va.h5"), 'y_va')
         utils.arr_to_csv(ya[tr_idx], self.path, "tr_labels.csv")
         utils.arr_to_csv(ya[va_idx], self.path, "va_labels.csv")
