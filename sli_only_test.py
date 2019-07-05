@@ -11,8 +11,9 @@ path = r"D:/speechrecogn/voxforge/"
 dir = r'models/'
 dir2_4 = r'D:\speechrecogn\voxforge\models\2-4'
 dir5 = r'D:\speechrecogn\voxforge\models\5'
+dir6_7 = r'D:\speechrecogn\voxforge\models\6-7'  # 30%
 
-mp = dir5
+mp = dir
 
 models = os.listdir(mp)
 

@@ -30,7 +30,7 @@ clean = cleaner.clean()
 ########################################################################################################################
 
 spectre = sli.AudioSpectrumExtractor(path, clean, "audios_spec", save_full_spec="audios_spec_full", seed=0,
-                                     h5_val_part=0.)
+                                     h5_val_part=0., invert_colors=True)
 patches, specs = spectre.extract()
 
 ########################################################################################################################

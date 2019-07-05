@@ -41,7 +41,7 @@ class AudioLangRecognitionNN:
         """predict labels"""
         self._load_data(data_path)
         self._load_model_for_prediction(model)
-        return self._predict(save)
+        return self._predict(save, model)
 
     def _load_data(self, data_path):
         if isinstance(data_path, dict):
@@ -160,26 +160,26 @@ class AudioLangRecognitionNN:
 
         cbs.append(cb_cp)
 
-        self.data['x'] /= 255.
-        self.data['x_va'] /= 255.
+        x = self.data['x'][()] / 255.
+        x_va = self.data['x_va'][()] / 255.
 
-        history = self.model.fit(self.data['x'], self.data['y'], epochs=self.epochs, batch_size=100, verbose=1,
-                                 validation_data=(self.data['x_va'], self.data['y_va']), callbacks=cbs, initial_epoch=0)
+        history = self.model.fit(x, self.data['y'], epochs=self.epochs, batch_size=100, verbose=1,
+                                 validation_data=(x_va, self.data['y_va']), callbacks=cbs, initial_epoch=0)
 
         print("TRAINING FINISHED")
 
         return history
 
-    def _predict(self, save):
+    def _predict(self, save, model):
         """predicts (if only x given) and evaluate (if y also exists)"""
-        self.data['x'] /= 255.
+        x = self.data['x'][()] / 255.
         ev = None
         if 'y' in self.data:
-            print("EVALUATING MODEL")
-            ev = self.model.evaluate(x=self.data['x'], y=self.data['y'], batch_size=100)
-            if self.verbose and eval:
-                print("LOSS:", eval[0], "ACCURACY:", eval[1])
-        print("PREDICTING LABELS")
+            print("EVALUATING MODEL:", model)
+            ev = self.model.evaluate(x=x, y=self.data['y'], batch_size=100, verbose=0)
+            if self.verbose and ev:
+                print("LOSS:", ev[0], "ACCURACY:", ev[1])
+        print("PREDICTING LABELS:", model)
         pr = self.model.predict(self.data['x'], batch_size=100)
         pr_l = self.n_largest_setarr(pr)
         self._save_predict_res(save, pr, pr_l)
