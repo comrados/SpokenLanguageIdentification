@@ -1,4 +1,4 @@
-import dask.array as da
+import dask.array as da  # to avoid using generators
 import h5py
 import tensorflow as tf
 import os
@@ -44,6 +44,7 @@ class AudioLangRecognitionNN:
         return self._predict(save, model)
 
     def _load_data(self, data_path):
+        """load data from file(s)"""
         if isinstance(data_path, dict):
             self._load_data_dict(data_path)
         elif isinstance(data_path, str):
@@ -54,17 +55,25 @@ class AudioLangRecognitionNN:
     def _load_data_string(self, data_path):
         """load data (from path string)"""
         f = h5py.File(data_path)
-
+        # dask allows to avoid using .fit_generator() and writing generators
         try:
-            self.data['x_va'] = f['x_va']
-            self.data['y_va'] = f['y_va']
+            self.data['x_va'] = da.from_array(f['x_va'], chunks='auto')
+            self.data['y_va'] = da.from_array(f['y_va'], chunks='auto')
         except ReferenceError:
             print("Validation set doesn't exist")
             self.data['x_va'] = None
             self.data['y_va'] = None
 
-        self.data['x'] = f['x']
-        self.data['y'] = f['y']
+        try:
+            self.data['w'] = da.from_array(f['w'], chunks='auto')
+            self.data['w_va'] = da.from_array(f['w_va'], chunks='auto')
+        except ReferenceError:
+            print("Weights don't exist")
+            self.data['w'] = None
+            self.data['w_va'] = None
+
+        self.data['x'] = da.from_array(f['x'], chunks='auto')
+        self.data['y'] = da.from_array(f['y'], chunks='auto')
 
         if self.verbose:
             for key in self.data:
@@ -72,6 +81,7 @@ class AudioLangRecognitionNN:
 
     def _load_data_dict(self, files_dict):
         """load data (from dict of links)"""
+        # dask allows to avoid using .fit_generator() and writing generators
         for key in files_dict:
             self.data[key] = da.from_array(h5py.File(files_dict[key])[key], chunks='auto')
             if self.verbose:
@@ -148,7 +158,7 @@ class AudioLangRecognitionNN:
                     print(f"\nReached {self.threshold} validation accuracy so cancelling training!")
                     self.model.stop_training = True
 
-        path = os.path.join(self.path, "models", "model.hdf5")
+        path = utils.check_path(self.path, "models", "model.hdf5")
         cb_cp = tf.keras.callbacks.ModelCheckpoint(path, monitor='val_acc', verbose=0, save_best_only=True,
                                                    save_weights_only=False, mode='auto', period=1)
 
@@ -160,8 +170,16 @@ class AudioLangRecognitionNN:
 
         cbs.append(cb_cp)
 
-        history = self.model.fit(self.data['x'], self.data['y'], epochs=self.epochs, batch_size=100, verbose=1,
-                                 validation_data=(self.data['x_va'], self.data['y_va']), callbacks=cbs, initial_epoch=0)
+        if self.data['w'] is not None:
+            if self.verbose:
+                print("TRAINING WITH WEIGHTS")
+            history = self.model.fit(self.data['x'], self.data['y'], epochs=self.epochs, batch_size=100, verbose=1,
+                                     validation_data=(self.data['x_va'], self.data['y_va']), callbacks=cbs,
+                                     sample_weight=self.data['w'])
+        else:
+            print("TRAINING WITHOUT WEIGHTS")
+            history = self.model.fit(self.data['x'], self.data['y'], epochs=self.epochs, batch_size=100, verbose=1,
+                                     validation_data=(self.data['x_va'], self.data['y_va']), callbacks=cbs)
 
         print("TRAINING FINISHED")
 
