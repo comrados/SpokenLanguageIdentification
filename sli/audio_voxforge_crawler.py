@@ -39,7 +39,28 @@ class AudioCrawlerVoxforge:
         self.file_lang_list = []
         self.verbose = verbose
 
+    def get_top_n(self, n=10):
+        """gets top N languages, by files quantity"""
+        counts = {}
+        for lang, url in self.links_dict.items():
+            print("SEARCHING FOR '" + lang + "' IN", url, end='')
+            files = self._get_file_names_from_url(url)
+            counts[lang] = len(files)
+            print(", FOUND ", len(files))
+        counts = sorted(counts.items(), key=lambda kv: kv[1], reverse=True)
+        print("TOTAL LANGUAGES:", len(counts))
+        print('FILES FOUND:', dict(counts))
+        if n < len(counts):
+            counts = dict(counts[0:n])
+            print('TOP ' + str(n) + ':', dict(counts))
+        else:
+            counts = dict(counts)
+            print('THERE ARE ONLY ' + str(len(counts)) + ' LANGUAGES:', dict(counts))
+        self.links_dict = {k: self.links_dict[k] for k in counts.keys() if k in self.links_dict}
+        return self.links_dict
+
     def crawl(self):
+        """download and unpack files"""
         self._voxforge_download()
         return self._extract_files()
 
