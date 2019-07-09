@@ -250,6 +250,15 @@ class AudioSpectrumExtractor:
             count_specs = self._flush_buffer(tags, count_specs)
             print("SPECTROGRAMS FLUSHED TO H5-FILE:", count_specs)
 
+    def get_stats(self):
+        df = pd.read_csv(self.audios)
+        counts = df.groupby('lang')['file'].nunique()
+        counts = counts.astype(int).to_dict()
+        counts = dict(sorted(counts.items(), key=lambda kv: kv[1], reverse=True))
+        print('UNIQUE FILES COUNTS PER LANGUGE:', counts)
+        return counts
+
+
     def extract(self):
         """calculate spectrogram and extract patches"""
         # read files
