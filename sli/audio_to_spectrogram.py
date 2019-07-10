@@ -33,7 +33,7 @@ class AudioSpectrumExtractor:
         :param save_full_spec: path to save full spectrograms, doesn't save if None
         :param invert_colors: spectrogram background color ('white or black')
         :param h5_val_part: validation part (only for h5-file)
-        :param h5_weights: toggle sample weights writing
+        :param h5_weights: toggle samples' weights writing
         :param plotting: plot spectrogram and patches
         :param verbose: verbose output
         """
@@ -60,10 +60,10 @@ class AudioSpectrumExtractor:
         self.spec_lang_list = []
         self.spec_full_lang_list = []
         self.h5_weights = h5_weights
-        self.h5_file = None
-        self.h5_buffer_x = []
-        self.h5_buffer_y = []
-        self.h5_buffer_w = []
+        self.h5_file = None  # file reference
+        self.h5_buf_x = []  # buffer for samples
+        self.h5_buf_y = []  # buffer for labels
+        self.h5_buf_w = []  # buffer fot weights
 
     def _get_offsets(self, w):
         """wrapper for offsets acquisition"""
@@ -122,7 +122,10 @@ class AudioSpectrumExtractor:
         """read and shuffle dataframe"""
         df = pd.read_csv(self.audios)  # read
         if self.h5_weights:
-            df['weight'] = compute_sample_weight('balanced', df['lang'])
+            if self.balanced:
+                df['weight'] = 1.
+            else:
+                df['weight'] = compute_sample_weight('balanced', df['lang'])
         return df.sample(frac=1, random_state=self.seed).reset_index(drop=True)  # shuffle
 
     def _init_h5(self, tags, max_count, h, w, lang_count):
@@ -135,38 +138,38 @@ class AudioSpectrumExtractor:
 
     def _try_write_to_buffer(self, entry, lang_dummy, weight, buff_size=1000):
         """writes to the temporary buffer"""
-        if len(self.h5_buffer_x) == len(self.h5_buffer_y) == len(self.h5_buffer_w) and len(self.h5_buffer_y) < buff_size:
-            self.h5_buffer_x.append(np.flip(entry, axis=0) / 255.)
-            self.h5_buffer_y.append(lang_dummy)
+        if len(self.h5_buf_x) == len(self.h5_buf_y) == len(self.h5_buf_w) and len(self.h5_buf_y) < buff_size:
+            self.h5_buf_x.append(np.flip(entry, axis=0) / 255.)
+            self.h5_buf_y.append(lang_dummy)
             if self.h5_weights:
-                self.h5_buffer_w.append(weight)
+                self.h5_buf_w.append(weight)
             return True
-        if len(self.h5_buffer_x) != len(self.h5_buffer_y):
+        if len(self.h5_buf_x) != len(self.h5_buf_y):
             raise Exception("Something went wrong")
         else:
             return False
 
     def _flush_buffer(self, tags, count):
         """flush buffer"""
-        self.h5_buffer_x = np.array(self.h5_buffer_x, dtype=np.float16)
-        self.h5_buffer_x = self.h5_buffer_x.reshape(self.h5_buffer_x.shape + (1,))
-        self.h5_buffer_y = np.array(self.h5_buffer_y)
+        self.h5_buf_x = np.array(self.h5_buf_x, dtype=np.float16)
+        self.h5_buf_x = self.h5_buf_x.reshape(self.h5_buf_x.shape + (1,))
+        self.h5_buf_y = np.array(self.h5_buf_y)
 
-        self.h5_file[tags[0]][count:count + len(self.h5_buffer_x)] = self.h5_buffer_x
-        self.h5_file[tags[1]][count:count + len(self.h5_buffer_y)] = self.h5_buffer_y
+        self.h5_file[tags[0]][count:count + len(self.h5_buf_x)] = self.h5_buf_x
+        self.h5_file[tags[1]][count:count + len(self.h5_buf_y)] = self.h5_buf_y
 
         if self.h5_weights:
-            self.h5_buffer_w = np.array(self.h5_buffer_w)
-            self.h5_file[tags[2]][count:count + len(self.h5_buffer_w)] = self.h5_buffer_w
+            self.h5_buf_w = np.array(self.h5_buf_w)
+            self.h5_file[tags[2]][count:count + len(self.h5_buf_w)] = self.h5_buf_w
             self.h5_file[tags[2]].flush()
-            self.h5_buffer_w = []
+            self.h5_buf_w = []
 
-        count = count + len(self.h5_buffer_x)
+        count = count + len(self.h5_buf_x)
 
         self.h5_file[tags[0]].flush()
         self.h5_file[tags[1]].flush()
-        self.h5_buffer_x = []
-        self.h5_buffer_y = []
+        self.h5_buf_x = []
+        self.h5_buf_y = []
 
         return count
 
@@ -189,7 +192,7 @@ class AudioSpectrumExtractor:
         count_specs = 0  # spectrograms count
         print("CONVERTING UP TO", df.shape[0], "FILES INTO SPECTROGRAMS")
         print("LANGUAGES:", len(counts))
-        print("MIN FILES' COUNT PER LANGUAGE:", thresholds)
+        print("FILES PER LANGUAGE TO BE CONVERTED:", thresholds)
         if self.save_as in ('both', 'h5'):
             if self.balanced:
                 max_count = sum(thresholds.values()) * self.n_patches
@@ -204,6 +207,13 @@ class AudioSpectrumExtractor:
             weight = row['weight']
             if self.verbose:
                 print(idx + 1, file_path, end="\r")
+
+            # output
+            if idx % 100 == 0 and idx != 0:
+                print("FILES PROCESSED (CONVERTED): " + str(idx) + " (" + str(sum(counts.values())) + ")")
+
+            if sum(counts.values()) >= sum(thresholds.values()):
+                break
 
             # checking counts and threshold (for balanced dataset)
             if counts[lang] >= thresholds[lang]:
@@ -231,10 +241,6 @@ class AudioSpectrumExtractor:
             else:
                 raise ("Wrong type of spectrograms saving: " + self.save_as)
 
-            # output
-            if idx + 1 == df.shape[0] or (idx + 1) % 100 == 0:
-                print("FILES PROCESSED:", idx + 1)
-
             # plotting
             if self.plotting:
                 self._plot_patches(patches, self.patch_sampling)
@@ -243,6 +249,7 @@ class AudioSpectrumExtractor:
             # increasing counter
             counts[lang] += 1
 
+        print("FILES PROCESSED (CONVERTED): " + str(idx+1) + " (" + str(sum(counts.values())) + ")")
         print("FILES CONVERTED TOTAL:", sum(counts.values()))
         print("FILES CONVERTED FOR EACH LANGUAGE:", counts)
 
@@ -257,7 +264,6 @@ class AudioSpectrumExtractor:
         counts = dict(sorted(counts.items(), key=lambda kv: kv[1], reverse=True))
         print('UNIQUE FILES COUNTS PER LANGUGE:', counts)
         return counts
-
 
     def extract(self):
         """calculate spectrogram and extract patches"""
