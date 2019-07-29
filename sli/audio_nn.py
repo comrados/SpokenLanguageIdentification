@@ -1,7 +1,6 @@
 import dask.array as da  # to avoid using generators
 import h5py
 import tensorflow as tf
-import os
 import tensorflow.keras.optimizers as tko
 import numpy as np
 from . import utils
@@ -56,18 +55,18 @@ class AudioLangRecognitionNN:
         """load data (from path string)"""
         f = h5py.File(data_path)
         # dask allows to avoid using .fit_generator() and writing generators
-        try:
+        if 'x_va' and 'y_va' in f.keys():
             self.data['x_va'] = da.from_array(f['x_va'], chunks='auto')
             self.data['y_va'] = da.from_array(f['y_va'], chunks='auto')
-        except ReferenceError:
+        else:
             print("Validation set doesn't exist")
             self.data['x_va'] = None
             self.data['y_va'] = None
 
-        try:
+        if 'w' and 'w_va' in f.keys():
             self.data['w'] = da.from_array(f['w'], chunks='auto')
             self.data['w_va'] = da.from_array(f['w_va'], chunks='auto')
-        except ReferenceError:
+        else:
             print("Weights don't exist")
             self.data['w'] = None
             self.data['w_va'] = None
@@ -194,7 +193,7 @@ class AudioLangRecognitionNN:
             if self.verbose and ev:
                 print("LOSS:", ev[0], "ACCURACY:", ev[1])
         print("PREDICTING LABELS:", model)
-        pr = self.model.predict(self.data['x'], batch_size=100)
+        pr = self.model.predict(self.data['x'], batch_size=100, verbose=0)
         pr_l = self.n_largest_setarr(pr)
         self._save_predict_res(save, pr, pr_l)
         return pr, pr_l, ev

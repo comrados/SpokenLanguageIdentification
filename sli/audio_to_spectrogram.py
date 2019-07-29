@@ -15,7 +15,8 @@ class AudioSpectrumExtractor:
     def __init__(self, path: str, audios: str, spec: str = "audios_spec", balanced: bool = True, n_patches: int = 10,
                  seed: int = None, frame_length: float = 25.0, patch_height: int = 100, patch_length: float = 1.0,
                  save_as: str = 'both', patch_sampling: str = 'random', save_full_spec: str = None, invert_colors=False,
-                 h5_val_part: float = 0.15, h5_weights: bool = True, plotting: bool = False, verbose: bool = False):
+                 h5_val_part: float = 0.15, h5_weights: bool = True, h5_name: str = "data.hdf5", plotting: bool = False,
+                 balanced_threshold: int = None, verbose: bool = False):
         """
         Initialize audio spectrogram extractor
 
@@ -31,10 +32,12 @@ class AudioSpectrumExtractor:
         :param save_as: save as images - 'img', h5-file - 'h5', both - 'both'
         :param patch_sampling: patch sampling: 'random' - random, 'gauss' - normal, 'uniform' - uniformly separated
         :param save_full_spec: path to save full spectrograms, doesn't save if None
-        :param invert_colors: spectrogram background color ('white or black')
+        :param invert_colors: invert spectrogram or not (changes background color)
         :param h5_val_part: validation part (only for h5-file)
         :param h5_weights: toggle samples' weights writing
+        :param h5_name: name of h5-file (will be saved to 'path' folder)
         :param plotting: plot spectrogram and patches
+        :param balanced_threshold: maximal number of files used for a single language of balanced dataset
         :param verbose: verbose output
         """
         self.path = path
@@ -64,6 +67,8 @@ class AudioSpectrumExtractor:
         self.h5_buf_x = []  # buffer for samples
         self.h5_buf_y = []  # buffer for labels
         self.h5_buf_w = []  # buffer fot weights
+        self.h5_name = h5_name
+        self.balanced_threshold = balanced_threshold
 
     def _get_offsets(self, w):
         """wrapper for offsets acquisition"""
@@ -204,7 +209,7 @@ class AudioSpectrumExtractor:
             file = os.path.basename(file_path)
             filename, file_extension = os.path.splitext(file)
             lang = row['lang']
-            weight = row['weight']
+            weight = row['weight'] if self.h5_weights else 1.
             if self.verbose:
                 print(idx + 1, file_path, end="\r")
 
@@ -271,10 +276,10 @@ class AudioSpectrumExtractor:
         df = self._read_and_shuffle_df()
         if self.save_as in ('both', 'h5'):
             try:
-                os.remove(os.path.join(self.path, 'data.hdf5'))
+                os.remove(os.path.join(self.path, self.h5_name))
             except Exception as err:
-                print("Impossible to remove file:", os.path.join(self.path, 'data.hdf5'), err)
-            self.h5_file = h5py.File(os.path.join(self.path, 'data.hdf5'), 'a')
+                print("Impossible to remove file:", os.path.join(self.path, self.h5_name), err)
+            self.h5_file = h5py.File(os.path.join(self.path, self.h5_name), 'a')
 
         tr = ["x", "y"]  # training tags
         va = ["x_va", "y_va"]  # validation tags
@@ -305,6 +310,9 @@ class AudioSpectrumExtractor:
         if self.balanced:
             counts = df.groupby('lang')['file'].nunique()
             min_count = counts.min()
+            # if limit is set and limit is larger than current min count
+            if self.balanced_threshold and min_count > self.balanced_threshold:
+                min_count = self.balanced_threshold
             t = pd.Series(index=counts.index)  # empty series
             t = t.fillna(min_count) * part  # fill empty values and multiply by part
             return t.astype(int).to_dict()  # convert

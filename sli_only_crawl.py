@@ -1,5 +1,4 @@
 import sli
-import os
 
 links = {'de': "http://www.repository.voxforge1.org/downloads/de/Trunk/Audio/Main/16kHz_16bit/",  # german
          'en': "http://www.repository.voxforge1.org/downloads/en/Trunk/Audio/Main/16kHz_16bit/",  # english
@@ -23,7 +22,7 @@ path = r"D:/speechrecogn/voxforge/"
 audios = "audios"
 archives = "archives"
 
-crawler = sli.AudioCrawlerVoxforge(links, path, audios, archives, limit=100, extraction_mode='many')
+crawler = sli.AudioCrawlerVoxforge(links, path, audios, archives, limit=50, extraction_mode='many')
 
 top_links = crawler.get_top_n(n=10)
 
