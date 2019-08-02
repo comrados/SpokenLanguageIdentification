@@ -1,6 +1,5 @@
 import numpy as np
 import librosa
-import scipy.io.wavfile as wav
 import os
 import pandas as pd
 from scipy.fftpack import fft, ifft, fftfreq
@@ -13,9 +12,8 @@ import time
 class AudioCleaner:
 
     def __init__(self, path: str, audios_dirty: str, audios_clean: str = "audios_clean", one_folder: bool = False,
-                 min_silence: float = 0.01, len_part: float = 0.25, min_time: float = 2.5, f: dict = None,
-                 amp_mag: bool = True, drc: bool = False, drc_param: list = None, plotting: bool = False,
-                 verbose: bool = False):
+                 min_silence: float = 0.01, len_part: float = 0.25, min_time: float = 2.5, plotting: bool = False,
+                 f: dict = {'type': 'butter', 'low': 100, 'high': 7000}, verbose: bool = False):
         """
         Initialize audio cleaner
 
@@ -27,9 +25,6 @@ class AudioCleaner:
         :param len_part: length in seconds of moving window for signal enveloping
         :param f: bandpass filter, dict attr: 'type' - ('butter' or 'fft'), 'low' - lowcut, 'high' highcut
         :param min_time: minimal length of processed audio to save
-        :param amp_mag: amplitude magnification (multiplies audio signal amplitude to increase volume)
-        :param drc: toggle dynamic range compression (DRC)
-        :param drc_param: DRC parameters array of tuples [(scale1, direction1)] (e.g.: [(5, 'up'), (1.1, 'down')])
         :param plotting: plot original and modified signals
         :param verbose: verbose output
         """
@@ -41,9 +36,6 @@ class AudioCleaner:
         self.len_part = len_part
         self.min_time = min_time
         self.f = f
-        self.amp_mag = amp_mag
-        self.drc = drc
-        self.drc_param = drc_param
         self.plotting = plotting
         self.file_lang_list = []
         self.verbose = verbose
@@ -65,23 +57,6 @@ class AudioCleaner:
         mask = self._envelope(signal, rate, min_silence)
         return signal, mask
 
-    def _dynamic_range_compression(self, signal):
-        """dynamic range compression"""
-        mask = np.where(signal < 0, True, False)
-
-        dbs = librosa.core.amplitude_to_db(signal)
-        threshold = np.mean(dbs)
-
-        if not self.drc_param:
-            return signal
-
-        for param in self.drc_param:
-            dbs = self._drc_hard_knee(dbs, threshold, param[0], direction=param[1])
-
-        amps_new = librosa.core.db_to_amplitude(dbs)
-        amps_new[mask] = amps_new[mask] * (-1)
-        return amps_new
-
     def _clean_audio(self, file_path):
         """
         cleans audio file
@@ -89,10 +64,6 @@ class AudioCleaner:
         try:
             signal, rate = librosa.core.load(file_path, sr=None)
             signal_orig = np.copy(signal)
-
-            # dynamic range compression
-            if self.drc:
-                signal = self._dynamic_range_compression(signal)
 
             if np.max(np.abs(signal)) <= self.min_silence:
                 if self.verbose:
@@ -103,21 +74,20 @@ class AudioCleaner:
             signal, mask = self._apply_filter(signal, rate, self.min_silence)
 
             # amplitude magnification
-            scaled_min_silence = self.min_silence
-            if self.amp_mag:
-                signal, scaled_min_silence = self._mul_sig_silence(signal, self.min_silence)
+            signal, k = utils.scale_signal_ampl(signal)
+            scaled_min_silence = self.min_silence * k
 
             return signal_orig, signal, mask, rate, scaled_min_silence
         except:
             print("FAILED TO CLEAN", file_path)
             return
 
-    def _output(self, out_path, file, res, min_time, lang, plotting):
+    def _output(self, out_path, file, res, lang):
         """saves clean audio, plots, writes console messages"""
         signal_orig, signal, mask, rate, scaled_min_silence = res
         ratio = len(signal[mask]) / len(signal)
 
-        if len(signal[mask]) < int(rate * min_time):
+        if len(signal[mask]) < int(rate * self.min_time):
             if self.verbose:
                 print('TOO SHORT:', '{:.2f}'.format(len(signal[mask]) / rate), os.path.basename(file), end="\r")
             return
@@ -125,9 +95,9 @@ class AudioCleaner:
         s = '{:.2f}'.format(ratio) + ' {:.4f}'.format(scaled_min_silence) + ' ' + file
         if self.verbose:
             print(s, end="\r")
-        if plotting:
+        if self.plotting:
             self._plot(signal_orig, signal, mask, rate, s=s)
-        self._save_audio(os.path.join(out_path, file), rate, signal[mask])
+        utils.save_audio(os.path.join(out_path, file), rate, signal[mask])
         self.file_lang_list.append({'file': os.path.join(out_path, file), 'lang': lang})
 
     def clean(self):
@@ -153,7 +123,7 @@ class AudioCleaner:
                 res = self._clean_audio(file_path)
                 if not res:
                     continue
-                self._output(out_path, file, res, self.min_time, lang, self.plotting)
+                self._output(out_path, file, res, lang)
 
             # output
             if idx + 1 == df.shape[0] or (idx + 1) % 100 == 0:
@@ -201,14 +171,6 @@ class AudioCleaner:
         return y
 
     @staticmethod
-    def _mul_sig_silence(signal, min_silence):
-        """scales signals (and silence values)"""
-        k = 0.9 / np.max(np.abs(signal))
-        signal = (signal * k)
-        min_silence = min_silence * k
-        return signal, min_silence
-
-    @staticmethod
     def _plot(orig, signal, mask, rate, s='title'):
         """plot signals"""
         plt.title(s)
@@ -218,30 +180,3 @@ class AudioCleaner:
         plt.legend()
         plt.show()
         time.sleep(0.1)
-
-    @staticmethod
-    def _convert_to_16bit_pcm(signal):
-        """convert floating point wav to 16-bit pcm"""
-        ids = signal >= 0
-        signal[ids] = signal[ids] * 32767
-        ids = signal < 0
-        signal[ids] = signal[ids] * 32768
-        return signal.astype(np.int16)
-
-    def _save_audio(self, path, rate, signal):
-        """save audio with optional conversion to 16-bit pcm"""
-        if 0.0 <= np.max(np.abs(signal)) <= 1.0:
-            wav.write(path, rate, self._convert_to_16bit_pcm(signal))
-        else:
-            wav.write(path, rate, signal)
-
-    @staticmethod
-    def _drc_hard_knee(dbs, threshold, scale=2, direction='up'):
-        """hard knee dynamic range compression filter"""
-        new = np.copy(dbs)
-        if direction is 'down':
-            mask = np.where(new > threshold, True, False)
-        else:
-            mask = np.where(new < threshold, True, False)
-        new[mask] = new[mask] * scale - threshold * (scale - 1)
-        return new

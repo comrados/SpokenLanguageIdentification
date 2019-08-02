@@ -14,6 +14,5 @@ drc = False
 drc_param = [(5, 'up'), (1.1, 'down')]
 plotting = False
 
-cleaner = sli.AudioCleaner(path, dirty, audios_clean, one_folder, min_silence, len_part, min_time, f,
-                           amp_mag, drc, drc_param, plotting)
+cleaner = sli.AudioCleaner(path, dirty, audios_clean, one_folder)
 clean = cleaner.clean()

@@ -22,9 +22,9 @@ path = r"D:/speechrecogn/voxforge/"
 audios = "audios"
 archives = "archives"
 
-crawler = sli.AudioCrawlerVoxforge(links, path, audios, archives, limit=50, extraction_mode='many')
+crawler = sli.AudioCrawlerVoxforge(links, path, audios, archives, limit=1, extraction_mode='many')
 
-top_links = crawler.get_top_n(n=10)
+top_links = crawler.get_top_n(n=5)
 
 print(top_links)
 
