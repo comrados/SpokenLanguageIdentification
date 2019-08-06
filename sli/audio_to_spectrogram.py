@@ -215,7 +215,8 @@ class AudioSpectrumExtractor:
 
             # output
             if idx % 100 == 0 and idx != 0:
-                print("FILES PROCESSED (CONVERTED): " + str(idx) + " (" + str(sum(counts.values())) + ")")
+                print("FILES PROCESSED (CONVERTED): " + str(idx) + " (" + str(sum(counts.values())) + ") / "
+                      + str(df.shape[0]))
 
             if sum(counts.values()) >= sum(thresholds.values()):
                 break

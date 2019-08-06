@@ -52,3 +52,15 @@ def _convert_to_16bit_pcm(signal):
     ids = signal < 0
     signal[ids] = signal[ids] * 32768
     return signal.astype(np.int16)
+
+
+def get_dirty_list_from_folders(path, dirty_audios):
+    dirty_path = os.path.join(path, dirty_audios)
+    langs = os.listdir(dirty_path)
+    df = pd.DataFrame(columns=["file", "lang"])
+    for lang in langs:
+        search_path = os.path.join(dirty_path, lang, "wav")
+        files = [os.path.join(search_path, f) for f in os.listdir(search_path)]
+        temp = pd.DataFrame({"file": files, "lang": lang}, columns=["file", "lang"])
+        df = df.append(temp, ignore_index=True)
+    df.to_csv(os.path.join(path, "dirty_audios_list.csv"), index=False)

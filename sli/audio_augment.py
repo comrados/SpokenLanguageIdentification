@@ -55,7 +55,8 @@ class AudioAugmentor:
 
             # saving path
             if self.one_folder:
-                file = lang + '_' + file
+                if not file.startswith(lang + '_'):
+                    file = lang + '_' + file
             else:
                 out_path = utils.check_path(self.path, self.audios_augmented, lang)
 

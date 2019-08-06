@@ -7,6 +7,6 @@ audios_aug = "audios_augmented"
 one_folder = True
 
 
-augmentor = sli.AudioAugmentor(path, clean, audios_aug, one_folder, verbose=True)
+augmentor = sli.AudioAugmentor(path, clean, audios_aug, one_folder)
 
 augmented = augmentor.augment()
