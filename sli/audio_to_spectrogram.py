@@ -15,7 +15,7 @@ class AudioSpectrumExtractor:
     def __init__(self, path: str, audios: str, spec: str = "audios_spec", balanced: bool = True, n_patches: int = 10,
                  seed: int = None, frame_length: float = 25.0, patch_height: int = 100, patch_length: float = 1.0,
                  save_as: str = 'both', patch_sampling: str = 'random', save_full_spec: str = None, invert_colors=False,
-                 h5_val_part: float = 0.15, h5_weights: bool = True, h5_name: str = "data.hdf5", plotting: bool = False,
+                 h5_weights: bool = True, h5_name: str = "data.hdf5", plotting: bool = False,
                  balanced_threshold: int = None, verbose: bool = False):
         """
         Initialize audio spectrogram extractor
@@ -33,7 +33,6 @@ class AudioSpectrumExtractor:
         :param patch_sampling: patch sampling: 'random' - random, 'gauss' - normal, 'uniform' - uniformly separated
         :param save_full_spec: path to save full spectrograms, doesn't save if None
         :param invert_colors: invert spectrogram or not (changes background color)
-        :param h5_val_part: validation part (only for h5-file)
         :param h5_weights: toggle samples' weights writing
         :param h5_name: name of h5-file (will be saved to 'path' folder)
         :param plotting: plot spectrogram and patches
@@ -57,7 +56,6 @@ class AudioSpectrumExtractor:
             utils.check_path(self.path, self.save_full_spec)
         utils.check_path(self.path, self.spec)
         self.invert_colors = invert_colors
-        self.h5_val_part = h5_val_part
         self.plotting = plotting
         self.verbose = verbose
         self.spec_lang_list = []
@@ -189,6 +187,7 @@ class AudioSpectrumExtractor:
 
     def _extract_part(self, df, part, tags, mirror_df=False):
         """extract part spectrograms"""
+        residuals = []
         if mirror_df:
             df = self._mirror_df(df)
         thresholds = self._get_thresholds(df, part)  # number of files drawn for each language
@@ -197,7 +196,7 @@ class AudioSpectrumExtractor:
         count_specs = 0  # spectrograms count
         print("CONVERTING UP TO", df.shape[0], "FILES INTO SPECTROGRAMS")
         print("LANGUAGES:", len(counts))
-        print("FILES PER LANGUAGE TO BE CONVERTED:", thresholds)
+        print("FILES PER LANGUAGE TO BE CONVERTED:", sum(thresholds.values()), thresholds)
         if self.save_as in ('both', 'h5'):
             if self.balanced:
                 max_count = sum(thresholds.values()) * self.n_patches
@@ -219,10 +218,12 @@ class AudioSpectrumExtractor:
                       + str(df.shape[0]))
 
             if sum(counts.values()) >= sum(thresholds.values()):
-                break
+                residuals.append({"file": file_path, "lang": lang, "weight": weight})
+                continue
 
             # checking counts and threshold (for balanced dataset)
             if counts[lang] >= thresholds[lang]:
+                residuals.append({"file": file_path, "lang": lang, "weight": weight})
                 continue
 
             # get scaled (from 0 to 255) spectrogram
@@ -263,6 +264,8 @@ class AudioSpectrumExtractor:
             count_specs = self._flush_buffer(tags, count_specs)
             print("SPECTROGRAMS FLUSHED TO H5-FILE:", count_specs)
 
+        return pd.DataFrame(residuals)
+
     def get_stats(self):
         df = pd.read_csv(self.audios)
         counts = df.groupby('lang')['file'].nunique()
@@ -271,8 +274,11 @@ class AudioSpectrumExtractor:
         print('UNIQUE FILES COUNTS PER LANGUGE:', counts)
         return counts
 
-    def extract(self):
-        """calculate spectrogram and extract patches"""
+    def extract(self, parts=(0.9, 0.07, 0.03)):
+        """
+        calculate spectrogram and extract patches
+        parts - sizes of training, validation and testing sets, for example [0.9, 0.05, 0.05]
+        """
         # read files
         df = self._read_and_shuffle_df()
         if self.save_as in ('both', 'h5'):
@@ -284,12 +290,15 @@ class AudioSpectrumExtractor:
 
         tr = ["x", "y"]  # training tags
         va = ["x_va", "y_va"]  # validation tags
+        te = ["x_te", "y_te"]  # testing tags
         if self.h5_weights:
             tr.append("w")
             va.append("w_va")
+            te.append("w_te")
 
-        self._extract_part(df, 1.0 - self.h5_val_part, tr)  # training part
-        self._extract_part(df, self.h5_val_part, va, mirror_df=True)  # validation part
+        residual_df = self._extract_part(df, parts[0], tr)  # training part
+        residual_df = self._extract_part(residual_df, parts[1]/(parts[1]+parts[2]), va)  # validation part
+        residual_df = self._extract_part(residual_df, 1, te)  # testing part
 
         spec_csv = utils.files_langs_to_csv(self.spec_lang_list, self.path, "audios_spec.csv")
         spec_full_csv = utils.files_langs_to_csv(self.spec_full_lang_list, self.path, "audios_spec_full.csv")
@@ -299,9 +308,12 @@ class AudioSpectrumExtractor:
                     print("TRAINING SHAPE", self.h5_file["x"].shape, self.h5_file["y"].shape, self.h5_file["w"].shape)
                     print("VALIDATION SHAPE", self.h5_file["x_va"].shape, self.h5_file["y_va"].shape,
                           self.h5_file["w_va"].shape)
+                    print("TESTING SHAPE", self.h5_file["x_te"].shape, self.h5_file["y_te"].shape,
+                          self.h5_file["w_te"].shape)
                 else:
                     print("TRAINING SHAPE", self.h5_file["x"].shape, self.h5_file["y"].shape)
                     print("VALIDATION SHAPE", self.h5_file["x_va"].shape, self.h5_file["y_va"].shape)
+                    print("TESTING SHAPE", self.h5_file["x_te"].shape, self.h5_file["y_te"].shape)
             self.h5_file.close()
         print()
         return spec_csv, spec_full_csv
