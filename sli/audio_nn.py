@@ -36,11 +36,11 @@ class AudioLangRecognitionNN:
         self._build_model_for_training()
         return self._train()
 
-    def predict(self, data_path, model=None, save=None):
+    def predict(self, data_path, labels=('x', 'y'), model=None, save=None):
         """predict labels"""
         self._load_data(data_path)
         self._load_model_for_prediction(model)
-        return self._predict(save, model)
+        return self._predict(save, model, labels)
 
     def _load_data(self, data_path):
         """load data from file(s)"""
@@ -50,6 +50,8 @@ class AudioLangRecognitionNN:
             self._load_data_string(data_path)
         else:
             raise Exception("Unsupported pointer to the data, must be string or dict of strings")
+        for key in self.data:
+            print("SAMPLES IN '" + key + "':", self.data[key].shape)
 
     def _load_data_string(self, data_path):
         """load data (from path string)"""
@@ -63,28 +65,32 @@ class AudioLangRecognitionNN:
             self.data['x_va'] = None
             self.data['y_va'] = None
 
-        if 'w' and 'w_va' in f.keys():
+        if 'x_te' and 'y_te' in f.keys():
+            self.data['x_te'] = da.from_array(f['x_te'], chunks='auto')
+            self.data['y_te'] = da.from_array(f['y_te'], chunks='auto')
+        else:
+            print("Test set doesn't exist")
+            self.data['x_te'] = None
+            self.data['y_te'] = None
+
+        if 'w' and 'w_va' and 'w_te' in f.keys():
             self.data['w'] = da.from_array(f['w'], chunks='auto')
             self.data['w_va'] = da.from_array(f['w_va'], chunks='auto')
+            self.data['w_te'] = da.from_array(f['w_te'], chunks='auto')
         else:
             print("Weights don't exist")
             self.data['w'] = None
             self.data['w_va'] = None
+            self.data['w_te'] = None
 
         self.data['x'] = da.from_array(f['x'], chunks='auto')
         self.data['y'] = da.from_array(f['y'], chunks='auto')
-
-        if self.verbose:
-            for key in self.data:
-                print("SAMPLES IN '" + key + "':", self.data[key].shape)
 
     def _load_data_dict(self, files_dict):
         """load data (from dict of links)"""
         # dask allows to avoid using .fit_generator() and writing generators
         for key in files_dict:
             self.data[key] = da.from_array(h5py.File(files_dict[key])[key], chunks='auto')
-            if self.verbose:
-                print("SAMPLES IN '" + key + "':", self.data[key].shape)
 
     def _load_model_for_prediction(self, model):
         """
@@ -184,16 +190,16 @@ class AudioLangRecognitionNN:
 
         return history
 
-    def _predict(self, save, model):
+    def _predict(self, save, model, labels):
         """predicts (if only x given) and evaluate (if y also exists)"""
         ev = None
-        if 'y' in self.data:
+        if labels[1] in self.data:
             print("EVALUATING MODEL:", model)
-            ev = self.model.evaluate(x=self.data['x'], y=self.data['y'], batch_size=100, verbose=0)
+            ev = self.model.evaluate(x=self.data[labels[0]], y=self.data[labels[1]], batch_size=100, verbose=0)
             if self.verbose and ev:
                 print("LOSS:", ev[0], "ACCURACY:", ev[1])
         print("PREDICTING LABELS:", model)
-        pr = self.model.predict(self.data['x'], batch_size=100, verbose=0)
+        pr = self.model.predict(self.data[labels[0]], batch_size=100, verbose=0)
         pr_l = self.n_largest_setarr(pr)
         self._save_predict_res(save, pr, pr_l)
         return pr, pr_l, ev

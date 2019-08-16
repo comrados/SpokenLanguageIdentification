@@ -10,7 +10,8 @@ import os
 # list_files = r'D:\speechrecogn\voxforge\data_balanced_2sec_100_1.hdf5'
 # list_files = r'D:\speechrecogn\voxforge\data_balanced_2sec_100_2.hdf5'
 # list_files = r'D:\speechrecogn\voxforge\data_balanced_2sec_100_3.hdf5'
-list_files = r'D:\speechrecogn\voxforge\data_balanced_2sec_50_1.hdf5'
+# list_files = r'D:\speechrecogn\voxforge\data_balanced_2sec_50_1.hdf5'
+list_files = r'D:\speechrecogn\voxforge\data_2sec_100_aug_1.hdf5'
 
 path = r"D:/speechrecogn/voxforge/"
 
@@ -19,8 +20,9 @@ dir2_4 = r'D:\speechrecogn\voxforge\models\2-4'
 dir5 = r'D:\speechrecogn\voxforge\models\5'
 dir6_7 = r'D:\speechrecogn\voxforge\models\6-7'  # 30%
 dir_inception = r"D:\speechrecogn\voxforge\models\incept"
+dir_inception2 = r"D:\speechrecogn\voxforge\models\incept2"
 
-mp = dir_inception
+mp = dir_inception2
 
 models = os.listdir(mp)
 
@@ -30,7 +32,7 @@ nn = sli.AudioLangRecognitionNN(path)
 
 for i, m in enumerate(models):
     print(i+1, 'of', len(models))
-    pr, pr_l, ev = nn.predict(list_files, model=os.path.join(mp, m), save='both')
+    pr, pr_l, ev = nn.predict(list_files, model=os.path.join(mp, m), save='both', labels=['x_te', 'y_te'])
     res.append([m, *ev])
 
 print("\n"+list_files+"\n")
