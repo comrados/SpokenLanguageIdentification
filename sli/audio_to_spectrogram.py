@@ -16,7 +16,7 @@ class AudioSpectrumExtractor:
                  seed: int = None, frame_length: float = 25.0, patch_height: int = 100, patch_length: float = 1.0,
                  save_as: str = 'both', patch_sampling: str = 'random', save_full_spec: str = None, invert_colors=False,
                  h5_weights: bool = True, h5_name: str = "data.hdf5", plotting: bool = False,
-                 balanced_threshold: int = None, verbose: bool = False):
+                 balanced_threshold: int = None, verbose: bool = False, consequent_step: int = 5):
         """
         Initialize audio spectrogram extractor
 
@@ -31,6 +31,7 @@ class AudioSpectrumExtractor:
         :param patch_length: length of patch in seconds
         :param save_as: save as images - 'img', h5-file - 'h5', both - 'both'
         :param patch_sampling: patch sampling: 'random' - random, 'gauss' - normal, 'uniform' - uniformly separated
+        'consequent' - similar to 'uniform', but frame sampling length is constrained by constrained_length
         :param save_full_spec: path to save full spectrograms, doesn't save if None
         :param invert_colors: invert spectrogram or not (changes background color)
         :param h5_weights: toggle samples' weights writing
@@ -38,6 +39,7 @@ class AudioSpectrumExtractor:
         :param plotting: plot spectrogram and patches
         :param balanced_threshold: maximal number of files used for a single language of balanced dataset
         :param verbose: verbose output
+        :param consequent_step: audio length to be used for 'constrained sampling'
         """
         self.path = path
         self.audios = audios
@@ -67,6 +69,7 @@ class AudioSpectrumExtractor:
         self.h5_buf_w = []  # buffer fot weights
         self.h5_name = h5_name
         self.balanced_threshold = balanced_threshold
+        self.constrained_step = consequent_step
 
     def _get_offsets(self, w):
         """wrapper for offsets acquisition"""
@@ -76,8 +79,10 @@ class AudioSpectrumExtractor:
             return self._get_uniform_offsets(w, self.patch_width, self.n_patches)
         elif self.patch_sampling is 'gauss':
             return self._get_gauss_offsets(w, self.patch_width, self.n_patches)
+        elif self.patch_sampling is 'consequent':
+            return self._get_consequent_offsets(self.constrained_step, self.patch_width, self.n_patches)
         else:
-            return self._get_random_offsets(w, self.patch_width, self.n_patches)
+            raise ValueError("'patch_sampling' can be 'random', 'uniform', 'gauss' or 'consequent'")
 
     def _get_spectrogram(self, file_path):
         """
@@ -131,7 +136,7 @@ class AudioSpectrumExtractor:
                 df['weight'] = compute_sample_weight('balanced', df['lang'])
         return df.sample(frac=1, random_state=self.seed).reset_index(drop=True)  # shuffle
 
-    def _init_h5(self, tags, max_count, h, w, lang_count):
+    def _init_h5_tags(self, tags, max_count, h, w, lang_count):
         """init h5 file"""
         self.h5_file.require_dataset(tags[0], (max_count, h, w, 1), maxshape=(max_count, h, w, 1), dtype=np.float16)
         self.h5_file.require_dataset(tags[1], (max_count, lang_count), maxshape=(max_count, lang_count),
@@ -142,7 +147,7 @@ class AudioSpectrumExtractor:
     def _try_write_to_buffer(self, entry, lang_dummy, weight, buff_size=1000):
         """writes to the temporary buffer"""
         if len(self.h5_buf_x) == len(self.h5_buf_y) == len(self.h5_buf_w) and len(self.h5_buf_y) < buff_size:
-            self.h5_buf_x.append(np.flip(entry, axis=0) / 255.)
+            self.h5_buf_x.append(np.flip(entry, axis=0))
             self.h5_buf_y.append(lang_dummy)
             if self.h5_weights:
                 self.h5_buf_w.append(weight)
@@ -176,9 +181,9 @@ class AudioSpectrumExtractor:
 
         return count
 
-    def _write_to_h5(self, tags, entry, lang_dummy, weight, count, force_flush=False):
+    def _write_to_h5(self, tags, entry, lang_dummy, weight, count, forced_flush=False):
         """buffer-wise writing to hd5"""
-        if self._try_write_to_buffer(entry, lang_dummy, weight) and not force_flush:
+        if self._try_write_to_buffer(entry, lang_dummy, weight) and not forced_flush:
             pass
         else:
             count = self._flush_buffer(tags, count)
@@ -202,7 +207,7 @@ class AudioSpectrumExtractor:
                 max_count = sum(thresholds.values()) * self.n_patches
             else:
                 max_count = sum(thresholds.values()) * self.n_patches
-            self._init_h5(tags, max_count, self.patch_height, self.patch_width, len(counts))
+            self._init_h5_tags(tags, max_count, self.patch_height, self.patch_width, len(counts))
         for idx, row in df.iterrows():
             file_path = row['file']
             file = os.path.basename(file_path)
@@ -285,8 +290,9 @@ class AudioSpectrumExtractor:
             try:
                 os.remove(os.path.join(self.path, self.h5_name))
             except Exception as err:
-                print("Impossible to remove file:", os.path.join(self.path, self.h5_name), err)
-            self.h5_file = h5py.File(os.path.join(self.path, self.h5_name), 'a')
+                print("Impossible to remove file (may not exist):", os.path.join(self.path, self.h5_name), err)
+            finally:
+                self.h5_file = h5py.File(os.path.join(self.path, self.h5_name), 'a')
 
         tr = ["x", "y"]  # training tags
         va = ["x_va", "y_va"]  # validation tags
@@ -361,7 +367,7 @@ class AudioSpectrumExtractor:
 
     @staticmethod
     def _get_uniform_offsets(w, l, n):
-        """uniformly distributed offsets"""
+        """evenly separated offsets with step proportional to spectrogram length"""
         starts = np.linspace(0, w - l - 1, num=n, dtype=int)
         offsets = []
         for start in starts:
@@ -383,6 +389,17 @@ class AudioSpectrumExtractor:
                 i += 1
                 offsets.append(offset)
                 offsets.append(offset + l)
+        return offsets
+
+    @staticmethod
+    def _get_consequent_offsets(s, l, n):
+        """evenly separated offsets with constant step"""
+        offsets = []
+        offset = 0
+        for i in range(n):
+            offsets.append(offset)
+            offsets.append(offset + l)
+            offset = offset + s
         return offsets
 
     @staticmethod
